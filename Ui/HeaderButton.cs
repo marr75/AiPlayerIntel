@@ -96,8 +96,10 @@ sealed class HeaderButton : MonoBehaviour,
         var cam = _canvas != null && _canvas.renderMode != RenderMode.ScreenSpaceOverlay ? _canvas.worldCamera : null;
         var corners = new Vector3[4];
         _showBtnRT.GetWorldCorners(corners);
-        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_canvasRT, corners[1], cam, out var local)) {
-            _rt.anchoredPosition = new Vector2(local.x - 10f - _rt.sizeDelta.x, local.y - 5f - _rt.sizeDelta.y - 6f);
+        // Drop below the notification button (bottom-left corner) into open space, clear of the
+        // LIFE SUPPORT / POWER / FLEETS tracker row and the notification button itself.
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_canvasRT, corners[0], cam, out var local)) {
+            _rt.anchoredPosition = new Vector2(local.x, local.y - 12f);
             Clamp();
         }
     }

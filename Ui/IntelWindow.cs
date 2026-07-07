@@ -24,10 +24,6 @@ sealed class IntelWindow : MonoBehaviour {
     const float MinWidth = 660f;
     const float MaxWidth = 1200f;
     const float WidthPad = 36f;
-    const float ResourceCol = 100f;
-    const float TargetCol = 160f;
-    const float StockCol = 130f;
-    const float StateCol = 140f;
     static IntelWindow? _instance;
     static Rect _winRect = new(60f, 60f, 680f, 560f);
     static Vector2 _scroll;
@@ -145,7 +141,7 @@ sealed class IntelWindow : MonoBehaviour {
             DrawByCompany(snap, measuring);
         }
         GUILayout.EndScrollView();
-        GUI.DragWindow(new Rect(0f, 0f, Mathf.Max(0f, _winRect.width - 92f), 20f));
+        GUI.DragWindow(new Rect(0f, 0f, Mathf.Max(0f, _winRect.width - 108f), 20f));
 
         if (measuring && _measureMaxX > 0f) {
             float target = Mathf.Clamp(_measureMaxX + WidthPad, MinWidth, MaxWidth);
@@ -154,9 +150,10 @@ sealed class IntelWindow : MonoBehaviour {
     }
 
     void DrawTitleButtons() {
+        // Right-anchored, clear of the window border (~12px) so they stay fully visible.
         float w = _winRect.width;
-        var refreshRect = new Rect(w - 88f, 3f, 60f, 18f);
-        var closeRect = new Rect(w - 24f, 3f, 20f, 18f);
+        var closeRect = new Rect(w - 34f, 4f, 20f, 18f);
+        var refreshRect = new Rect(w - 98f, 4f, 60f, 18f);
         if (GUI.Button(refreshRect, "Refresh", SBtn) && !_refreshInFlight) {
             _accum = 0f;
             Refresh().Forget();
@@ -331,50 +328,53 @@ sealed class IntelWindow : MonoBehaviour {
             }
         }
         bool stocked = r.State == ResourceState.Stocked;
-        Col(r.Resource, ResourceCol, r.Resource);
-        Col(r.Provenance, TargetCol, sep: true);
-        Col(StockText(r, stocked), StockCol, sep: true);
-        Col(DeficitState(r, stocked), StateCol, sep: true);
+        GUILayout.Label(new GUIContent(RowSentence(r, stocked), r.Resource), SLbl, GUILayout.ExpandWidth(false));
         DrawPrice(r);
         GUILayout.FlexibleSpace();
         GUILayout.EndHorizontal();
         Track(measuring);
     }
 
-    void Col(string text, float width, string? tip = null, bool sep = false) {
-        var shown = text.Length == 0 ? "" : sep ? $"│  {text}" : text;
-        GUILayout.Label(tip != null ? new GUIContent(shown, tip) : new GUIContent(shown), SLbl, GUILayout.Width(width));
+    static string RowSentence(ResourceLine r, bool stocked) {
+        var parts = new List<string>();
+        if (r.Provenance.Length > 0) { parts.Add(r.Provenance); }
+        parts.Add(StockText(r, stocked));
+        var state = DeficitState(r, stocked);
+        if (state.Length > 0) { parts.Add(state); }
+        return $"{r.Resource} — {string.Join(" · ", parts)}";
     }
 
     void DrawPrice(ResourceLine r) {
         if (r.MaxBid is { } mb) {
             var text = $"max buy {Mag(r.PriceQty)}u @ {Money(mb)}/u "
                 + $"(self-source {Money(r.DiyMoneyPerUnit ?? 0)}/u + ~{Mag(r.DiyTotalDays ?? 0)} days)";
-            GUILayout.Label(new GUIContent($"│  {text}", PriceLegend), SLbl, GUILayout.ExpandWidth(false));
+            GUILayout.Label(new GUIContent($" · {text}", PriceLegend), SLbl, GUILayout.ExpandWidth(false));
         }
         if (r.PostedPrice is { } p) {
-            GUILayout.Label($"│  offer {(r.PostedIsBuy == true ? "buy" : "sell")} {Money(p)}×{r.PostedCountLeft:0}",
+            GUILayout.Label($" · offer {(r.PostedIsBuy == true ? "buy" : "sell")} {Money(p)}×{r.PostedCountLeft:0}",
                 SLbl, GUILayout.ExpandWidth(false));
         }
     }
 
     static string StockText(ResourceLine r, bool stocked) {
         if (r.IsBom) {
-            return stocked ? $"have {Mag(r.Have)} stocked" : $"have {Mag(r.Have)} / need {Mag(r.PrimaryQty)}";
+            return stocked ? $"have {Mag(r.Have)} stocked" : $"have {Mag(r.Have)}/need {Mag(r.PrimaryQty)}";
         }
         return $"have {Mag(r.Have)}";
     }
 
     static string DeficitState(ResourceLine r, bool stocked) {
+        if (stocked) { return ""; }
         var parts = new List<string>();
-        if (r.IsBom && !stocked && r.Deficit > 0) { parts.Add($"deficit {Mag(r.Deficit)}"); }
-        if (!stocked && r.Rate is { } rate && Math.Abs(rate) >= 0.05) {
+        if (r.IsBom && r.Deficit > 0) {
+            var word = StateWord(r.State);
+            parts.Add(word.Length > 0 ? $"deficit {Mag(r.Deficit)} ({word})" : $"deficit {Mag(r.Deficit)}");
+        }
+        if (r.Rate is { } rate && Math.Abs(rate) >= 0.05) {
             parts.Add($"{(rate >= 0 ? "+" : "")}{Mag(rate)}/day");
         }
-        if (!stocked && r.EtaDays is { } eta) { parts.Add($"ETA ~{eta:0} d"); }
-        var word = StateWord(r.State);
-        if (word.Length > 0) { parts.Add(word); }
-        return string.Join("  ", parts);
+        if (r.EtaDays is { } eta) { parts.Add($"ETA ~{eta:0} d"); }
+        return string.Join(" · ", parts);
     }
 
     static void OpenMarket(ObjectInfo? body) {
