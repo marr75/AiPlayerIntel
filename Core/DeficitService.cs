@@ -75,12 +75,21 @@ sealed class DeficitService {
     }
 
     static bool BomMatches(Objective o, ResourceDefinition rd, int whereId) {
-        if (o.toID != whereId) { return false; }
+        if (!LocationMatches(o, whereId)) { return false; }
         foreach (var line in Lines(o)) {
             if (line.Rd == rd) { return true; }
         }
         return false;
     }
+
+    // Build types resolve their location from fromID (game: CompanyObjectiveData:779, fromID==-1 = any
+    // location); Deliver resolves from toID (game: CompanyObjectiveData:318 → CheckDelivery).
+    static bool LocationMatches(Objective o, int whereId) => o.objectiveType switch {
+        EObjectiveType.CreateSpaceCraft or EObjectiveType.CreateVehicle or EObjectiveType.BuildFacility
+            => o.fromID == -1 || o.fromID == whereId,
+        EObjectiveType.Deliver => o.toID == whereId,
+        _ => false,
+    };
 
     // Creditable BOM lines (resource + outstanding quantity) for an objective; empty for the
     // non-creditable types (MakeResearch, ScheduleFly, module/crew Deliver — zap §1b).

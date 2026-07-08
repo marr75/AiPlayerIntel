@@ -206,7 +206,7 @@ sealed class IntelPanel : MonoBehaviour {
         _w.AddHeaderCell(h, Cols[2], "Max buy", SortCol.MaxBuy, this);
         _w.AddHeaderCell(h, Cols[3], "Have", SortCol.Have, this);
         _w.AddHeaderCell(h, Cols[4], "Want", SortCol.Want, this);
-        _w.AddHeaderCell(h, Cols[5], "ETA", SortCol.Eta, this);
+        _w.AddHeaderCell(h, Cols[5], "Rate", SortCol.Eta, this);
     }
 
     void EmitLeaf(IntelRow r) {

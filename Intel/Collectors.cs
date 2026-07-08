@@ -73,8 +73,9 @@ static class Collectors {
             var key = company.ID ?? company.name;
             var active = GetActiveObjective(company, cb);
             var (bomObjectives, secondary) = CollectContractDemand(company, cb, active);
+            var hq = company.Definition != null ? company.mainObjectInfo : null;
             var bom = new List<BomEntry>();
-            foreach (var o in bomObjectives) { bom.AddRange(BuildBom(o)); }
+            foreach (var o in bomObjectives) { bom.AddRange(BuildBom(o, hq)); }
             companies.Add(new CompanyIntel {
                 CompanyKey = key,
                 CompanyName = ResolveCompanyName(company),
@@ -208,12 +209,16 @@ static class Collectors {
         }
     }
 
-    static IReadOnlyList<BomEntry> BuildBom(Objective? o) {
+    static IReadOnlyList<BomEntry> BuildBom(Objective? o, ObjectInfo? hq) {
         var bom = new List<BomEntry>();
         if (o == null) { return bom; }
 
-        var loc = ResolveObjectInfo(o.toID);
-        var locName = loc != null ? loc.ObjectName : ResolveObjectName(o.toID);
+        // Build types resolve their location from fromID (game: CompanyObjectiveData:777, fromID==-1 =
+        // any location, shown against HQ here); Deliver resolves from toID (CompanyObjectiveData:862).
+        bool isBuild = o.objectiveType is EObjectiveType.CreateSpaceCraft or EObjectiveType.CreateVehicle or EObjectiveType.BuildFacility;
+        var id = isBuild ? o.fromID : o.toID;
+        var loc = id > 0 ? ResolveObjectInfo(id) : hq;
+        var locName = loc != null ? loc.ObjectName : ResolveObjectName(id);
 
         switch (o.objectiveType) {
             case EObjectiveType.CreateSpaceCraft:

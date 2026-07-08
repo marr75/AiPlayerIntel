@@ -484,6 +484,6 @@ sealed class ResizeHandle : MonoBehaviour, IPointerDownHandler, IDragHandler {
 // Runtime layout persistence (survives open/close within a session).
 static class PanelLayout {
     internal static Vector2 NormPos;
-    internal static Vector2 Size = new(920f, 460f);
+    internal static Vector2 Size = new(560f, 460f);
     internal static bool Saved;
 }

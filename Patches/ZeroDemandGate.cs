@@ -1,5 +1,6 @@
 using System;
 using AI.Conditionals;
+using AiPlayerIntel.Config;
 using AiPlayerIntel.Core;
 using BehaviorDesigner.Runtime.Tasks;
 using HarmonyLib;
@@ -12,7 +13,6 @@ static class ZeroDemandGate {
     static void Postfix(IsOfferViable __instance, ref TaskStatus __result) {
         var cfg = Services.Cfg;
         if (cfg == null || !cfg.MasterEnable.Value) { return; }
-        if (!cfg.ZeroDemandGate.Value && !cfg.ClampBuyQuantity.Value) { return; }
         if (__result != TaskStatus.Success || __instance.isBuy.Value) { return; }   // buyer branch only (!isBuy)
 
         var cb = __instance.CompanyBehaviour;
@@ -21,8 +21,8 @@ static class ZeroDemandGate {
         if (cb == null || where == null || rd == null) { return; }
 
         var d = Services.Deficit.Evaluate(cb, where, rd);
-        if (cfg.ZeroDemandGate.Value && d.UnmetVsDemand <= 0 && !d.InBom) {   // need-less → reject (§3.2)
-            __result = TaskStatus.Failure;
+        if (cfg.MarketBuyOrder.Value == MarketBuyOrder.ContractOnly && d.UnmetVsDemand <= 0 && !d.InBom) {
+            __result = TaskStatus.Failure;   // need-less → reject; Vanilla/ContractFirst = no eligibility flip (§2e)
             return;
         }
         if (cfg.ClampBuyQuantity.Value && d.UnmetVsNeed > 0) {                // clamp take to remaining deficit

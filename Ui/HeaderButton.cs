@@ -91,15 +91,18 @@ sealed class HeaderButton : MonoBehaviour,
         PositionNextToNotificationButton();
     }
 
+    const float LeftEdgeInset = 260f;
+
     void PositionNextToNotificationButton() {
         if (_showBtnRT == null || _canvasRT == null) { return; }
         var cam = _canvas != null && _canvas.renderMode != RenderMode.ScreenSpaceOverlay ? _canvas.worldCamera : null;
         var corners = new Vector3[4];
         _showBtnRT.GetWorldCorners(corners);
-        // Drop below the notification button (bottom-left corner) into open space, clear of the
-        // LIFE SUPPORT / POWER / FLEETS tracker row and the notification button itself.
+        // Default to the left side of the top bar (same height as the notification button) instead
+        // of stacking under it on the far right; LeftEdgeInset keeps clear of the company logo.
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_canvasRT, corners[0], cam, out var local)) {
-            _rt.anchoredPosition = new Vector2(local.x, local.y - 12f);
+            var rect = _canvasRT.rect;
+            _rt.anchoredPosition = new Vector2(rect.xMin + LeftEdgeInset, local.y - 12f);
             Clamp();
         }
     }

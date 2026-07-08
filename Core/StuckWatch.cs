@@ -112,10 +112,11 @@ sealed class StuckWatch : MonoBehaviour {
         if (match != null) { mm.CancelOffer(match); }
     }
 
-    bool Skipped(EObjectiveType t) => t switch {
-        EObjectiveType.MakeResearch => _cfg.SkipResearch.Value,
-        EObjectiveType.ScheduleFly => _cfg.SkipScheduleFly.Value,
-        EObjectiveType.ScheduleFlyGravityAssist => _cfg.SkipScheduleFly.Value,
+    // These objective types have no creditable resource line, so the skip is not optional.
+    static bool Skipped(EObjectiveType t) => t switch {
+        EObjectiveType.MakeResearch => true,
+        EObjectiveType.ScheduleFly => true,
+        EObjectiveType.ScheduleFlyGravityAssist => true,
         _ => false,
     };
 

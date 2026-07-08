@@ -62,10 +62,10 @@ sealed class IntelController : MonoBehaviour {
     void UpdateDiyGate() {
         var gm = MonoBehaviourSingleton<GameManager>.Instance;
         bool blocked = gm != null && gm.blockCheckCanPLanMissionForNotPlayer;
-        bool active = Plugin.EnableDiyValuation.Value && !blocked;
+        bool active = !blocked;
         if (active != _diyActive) {
             Plugin.Log.LogInfo($"AI Player Intel: DIY valuation {(active ? "enabled" : "disabled")} "
-                + $"(config={Plugin.EnableDiyValuation.Value}, blocked={blocked}).");
+                + $"(blocked={blocked}).");
         }
         _diyActive = active;
     }
