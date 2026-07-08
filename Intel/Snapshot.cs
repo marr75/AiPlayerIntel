@@ -55,6 +55,7 @@ sealed class CompanyIntel {
     public string CompanyKey { get; init; } = "";
     public string CompanyName { get; init; } = "";
     public Sprite? CompanyIcon { get; init; }
+    public bool IsWorldGovernment { get; init; }
     public double TimeValuePerDay { get; init; }
     public string CostCalcType { get; init; } = "";
     public ObjectiveLine? Current { get; init; }

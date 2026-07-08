@@ -1,4 +1,4 @@
-using AiPlayerIntel.Ui;
+using AiPlayerIntel.Intel;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
@@ -13,8 +13,9 @@ public class Plugin : BaseUnityPlugin {
     internal static ConfigEntry<KeyCode> ToggleKey = null!;
     internal static ConfigEntry<float> RefreshSeconds = null!;
     internal static ConfigEntry<bool> EnableDiyValuation = null!;
-    internal static ConfigEntry<bool> StyledTheme = null!;
-    internal static ConfigEntry<bool> BodyFirstGrouping = null!;
+
+    // Deprecated v3: StyledTheme (IMGUI skin) and BodyFirstGrouping (swappable grouping) retired
+    // with the IMGUI panel; UGUI is a single vanilla-matching theme over a fixed body→company tree.
 
     void Awake() {
         Log = Logger;
@@ -25,12 +26,9 @@ public class Plugin : BaseUnityPlugin {
         EnableDiyValuation = Config.Bind("Valuation", "EnableDiyValuation", true,
             "Re-derive each AI's DIY willingness-to-pay via ObtainResourcePriorityGate.Calc. "
             + "Read-only; auto-disabled if the game blocks non-player mission checks.");
-        StyledTheme = Config.Bind("Window", "StyledTheme", true, "Dark/teal skin vs. plain IMGUI.");
-        BodyFirstGrouping = Config.Bind("Window", "BodyFirstGrouping", true,
-            "Group rows by body then company (true) vs. company then body (false). Toggleable live in the panel.");
 
         new Harmony(MyPluginInfo.PLUGIN_GUID).PatchAll();
-        IntelWindow.Ensure();
+        IntelController.Ensure();
         Log.LogInfo($"Plugin {MyPluginInfo.PLUGIN_GUID} loaded.");
     }
 }

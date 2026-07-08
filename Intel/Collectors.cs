@@ -78,6 +78,7 @@ static class Collectors {
                 CompanyKey = key,
                 CompanyName = ResolveCompanyName(company),
                 CompanyIcon = company.Definition != null ? company.Definition.LogoImage : null,
+                IsWorldGovernment = company.Definition != null && company.Definition.IsWorldGovernment,
                 TimeValuePerDay = cb.AIConfig.costMultiplier.Time,
                 CostCalcType = cb.AIConfig.costCalcType.ToString(),
                 Current = BuildObjectiveLine(active),

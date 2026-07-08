@@ -7,5 +7,8 @@ namespace AiPlayerIntel.Patches;
 
 [HarmonyPatch(typeof(UIManager), "Update")]
 static class EscapeGuardPatch {
-    static bool Prefix() => !Input.GetKeyDown(KeyCode.Escape) || !IntelWindow.HandleEscape();
+    static bool Prefix() {
+        if (!Input.GetKeyDown(KeyCode.Escape)) { return true; }
+        return !IntelPanel.HandleEscape();
+    }
 }

@@ -10,7 +10,7 @@ using UnityEngine.UI;
 namespace AiPlayerIntel.Ui;
 
 // Floating HUD toggle, parked next to the vanilla notification button (same pattern the
-// Power/LifeSupport/Fleet tracker mods use). onClick toggles the IMGUI IntelWindow.
+// Power/LifeSupport/Fleet tracker mods use). onClick toggles the UGUI IntelPanel.
 sealed class HeaderButton : MonoBehaviour,
     IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler,
     IBeginDragHandler, IDragHandler, IEndDragHandler {
@@ -72,7 +72,7 @@ sealed class HeaderButton : MonoBehaviour,
             hb._hover = bg.color * 1.3f;
             hb._press = bg.color * 0.7f;
             hb._showBtnRT = showBtn.GetComponent<RectTransform>();
-            hb._onClick = IntelWindow.Toggle;
+            hb._onClick = IntelPanel.Toggle;
             Plugin.Log.LogInfo("AI Player Intel header button injected.");
         } catch (Exception e) {
             Plugin.Log.LogWarning($"AI Player Intel: header button injection failed: {e.Message}");
