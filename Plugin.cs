@@ -1,3 +1,5 @@
+using AiPlayerIntel.Config;
+using AiPlayerIntel.Core;
 using AiPlayerIntel.Intel;
 using BepInEx;
 using BepInEx.Configuration;
@@ -27,8 +29,13 @@ public class Plugin : BaseUnityPlugin {
             "Re-derive each AI's DIY willingness-to-pay via ObtainResourcePriorityGate.Calc. "
             + "Read-only; auto-disabled if the game blocks non-player mission checks.");
 
+        var cfg = new Cfg(Config);
+        cfg.Validate();
+        Services.Init(cfg);
+
         new Harmony(MyPluginInfo.PLUGIN_GUID).PatchAll();
         IntelController.Ensure();
+        StuckWatch.Ensure(Services.Cfg, Services.Deficit);
         Log.LogInfo($"Plugin {MyPluginInfo.PLUGIN_GUID} loaded.");
     }
 }

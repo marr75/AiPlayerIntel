@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using AI;
 using AI.Decorators;
+using AiPlayerIntel.Core;
 using Cysharp.Threading.Tasks;
 using Data.ScriptableObject;
 using Game;
@@ -329,7 +330,7 @@ static class Collectors {
             var mult = cb.AIConfig.takeOfferBuyUnitCostMultiplier;
             foreach (var r in rows.Values) {
                 if (r.Rd == null || r.Loc == null) { continue; }
-                if (!r.IsBom && !r.PostedPrice.HasValue) { continue; }
+                if (!Services.Cfg.ShowAllMarkets.Value && !r.IsBom && !r.PostedPrice.HasValue) { continue; }
                 double q = NeedQty(r);
                 if (q <= 0) { continue; }
                 r.PriceQty = q;
