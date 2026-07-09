@@ -18,11 +18,11 @@ namespace AiPlayerIntel.Patches;
 // field. Leader → factor 1.0 → early return → byte-identical. Fail-open on any error.
 [HarmonyPatch(typeof(CompanyDefinition.CompanyAIConfig), nameof(CompanyDefinition.CompanyAIConfig.CalcCostMagnitude))]
 static class CatchUpMultiplier {
+    static bool Prepare() => Services.Config.MasterEnable.Value && Services.Config.CatchUpEnable.Value;
+
     [HarmonyPostfix]
     static void Postfix(CompanyDefinition.CompanyAIConfig __instance, CompanyCost companyCost, ref double __result) {
         try {
-            var cfg = Services.Cfg;
-            if (cfg == null || !cfg.MasterEnable.Value || !cfg.CatchUpEnable.Value) { return; }
             var cb = companyCost.Company;
             if (cb == null) { return; }
             var company = cb.Company;
@@ -38,7 +38,7 @@ static class CatchUpMultiplier {
                     __result += (catchUp - 1.0) * t;   // exact time-term add
                     break;
                 case CompanyDefinition.CompanyAIConfig.CostCalcType.Magnitude:
-                    __result = cfg.CatchUpTimeOnly.Value
+                    __result = Services.Config.CatchUpTimeOnly.Value
                         ? Math.Sqrt(m * m + catchUp * catchUp * t * t)   // scale only the time term
                         : __result * catchUp;
                     break;

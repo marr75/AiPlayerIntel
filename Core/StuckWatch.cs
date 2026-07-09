@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using AI;
-using AiPlayerIntel.Config;
 using Data.ScriptableObject;
 using Game;
 using Game.ContractsObjectives;
@@ -19,22 +18,20 @@ namespace AiPlayerIntel.Core;
 sealed class StuckWatch : MonoBehaviour {
     static StuckWatch? _instance;
     readonly Dictionary<CompanyObjectiveData, int> _firstSeen = new();
-    Cfg _cfg = null!;
     DeficitService _deficit = null!;
     float _accum;
 
-    internal static void Ensure(Cfg cfg, DeficitService deficit) {
+    internal static void Ensure(DeficitService deficit) {
         if (_instance != null) { return; }
         var go = new GameObject(nameof(StuckWatch)) { hideFlags = HideFlags.HideAndDontSave };
         DontDestroyOnLoad(go);
         _instance = go.AddComponent<StuckWatch>();
-        _instance._cfg = cfg;
         _instance._deficit = deficit;
         Plugin.Log.LogInfo("AI Player Intel StuckWatch created.");
     }
 
     void Update() {
-        if (_cfg == null || !_cfg.UnstickEnable.Value) { return; }
+        if (!Services.Config.UnstickEnable.Value) { return; }
         _accum += Time.deltaTime;
         if (_accum < 1f) { return; }   // game days advance far slower than 1s; a 1Hz scan is ample
         _accum = 0f;
@@ -48,7 +45,7 @@ sealed class StuckWatch : MonoBehaviour {
         if (gm?.Companies == null || cm?.allContracts == null || tc == null) { return; }
 
         int today = tc.TotalDays;
-        int stuckDays = (int)Mathf.Clamp(_cfg.StuckDays.Value, 5f, 365f);
+        int stuckDays = (int)Mathf.Clamp(Services.Config.StuckDays.Value, 5f, 365f);
         var live = new HashSet<CompanyObjectiveData>();
 
         foreach (var company in gm.Companies) {

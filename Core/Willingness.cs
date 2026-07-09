@@ -16,11 +16,11 @@ sealed class Willingness {
     // hand-set Fraction (design §5.4). Derived: assumedMaxCatchUp(2.0)*buyMult(0.9)*(1+f) <= 3.
     const double MaxFraction = 3.0 / (2.0 * 0.9) - 1.0;   // ~0.667
 
-    readonly Cfg _cfg;
+    readonly Configuration _cfg;
     readonly DeficitService _deficit;
     readonly StandingService _standing;
 
-    public Willingness(Cfg cfg, DeficitService deficit, StandingService standing) {
+    public Willingness(Configuration cfg, DeficitService deficit, StandingService standing) {
         _cfg = cfg;
         _deficit = deficit;
         _standing = standing;
@@ -48,9 +48,15 @@ sealed class Willingness {
     // Price-space catch-up (design §8.4): the cost-of-time multiplier for a trailing company; leader → 1.0.
     public double CostOfTimeFactor(Company c) => _standing.CatchUpFactor(c);
 
-    // Composite max unit price the AI will pay, as a multiplier over base DIY (design §8.1). The intel tab
-    // (J) is a follow-up on this; at the buy sites the ceilings apply NeedFactor and the CalcCostMagnitude
-    // basis Postfix applies CostOfTimeFactor, so the full product is realized by call-site composition.
+    // Composite willingness the AI will pay, as a DIMENSIONLESS multiplier over base DIY (design §5.3/§8.1),
+    // NOT an absolute price. It stays multiplier-only on purpose: the base DIY oracle
+    // (ObtainResourcePriorityGate.Calc, even on the cleanCalc:true "pure read") is async — it awaits four
+    // sub-gates (ObtainResourcePriorityGate.cs:113/117/121/125) — so folding it in would require a blocking
+    // wait inside the arbiter's synchronous OrderBy sort key, the deadlock hazard we must avoid. The buy
+    // sites apply NeedFactor and the CalcCostMagnitude basis Postfix applies CostOfTimeFactor, so the full
+    // absolute product is realized by call-site composition, not here. Consequence: the price sub-order
+    // (OfferArbiter PriceAscending/Descending) ranks by premium factors only and every buyer ties at 1.0
+    // when both price levers are off.
     public double WhatWillPay(CompanyBehaviour? cb, ObjectInfo? where, ResourceDefinition? rd, double qty) {
         var company = cb?.Company;
         double catchUp = company != null ? CostOfTimeFactor(company) : 1.0;

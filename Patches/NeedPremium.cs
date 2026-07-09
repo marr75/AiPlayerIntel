@@ -31,7 +31,7 @@ static class NeedPremiumHooks {
             var cb = task.CompanyBehaviour;
             var where = task.where.Value?.Object;
             var rd = task.what.Value as ResourceDefinition;
-            return cost * Services.Willingness.NeedFactor(cb, where, rd, task.howMuch.Value, Services.Cfg.NeedPremiumApplyToAccepts.Value);
+            return cost * Services.Willingness.NeedFactor(cb, where, rd, task.howMuch.Value, Services.Config.NeedPremiumApplyToAccepts.Value);
         } catch (Exception ex) {
             Plugin.Log.LogError($"NeedPremium.PremiumAccept failed: {ex}");
             return cost;
@@ -45,7 +45,7 @@ static class NeedPremiumHooks {
             var cb = gate.CompanyBehaviour;
             var where = gate.where.Value?.Object;
             var rd = gate.what.Value as ResourceDefinition;
-            return num * Services.Willingness.NeedFactor(cb, where, rd, gate.howMuch.Value, Services.Cfg.NeedPremiumApplyToPostedBids.Value);
+            return num * Services.Willingness.NeedFactor(cb, where, rd, gate.howMuch.Value, Services.Config.NeedPremiumApplyToPostedBids.Value);
         } catch (Exception ex) {
             Plugin.Log.LogError($"NeedPremium.PremiumBid failed: {ex}");
             return num;
@@ -59,7 +59,7 @@ static class NeedPremiumHooks {
         try {
             var rd = what as ResourceDefinition;
             double qty = howMuch != null ? howMuch.Value : 0.0;
-            return magnitude * Services.Willingness.NeedFactor(cb, where, rd, qty, Services.Cfg.NeedPremiumApplyToProactiveObtain.Value);
+            return magnitude * Services.Willingness.NeedFactor(cb, where, rd, qty, Services.Config.NeedPremiumApplyToProactiveObtain.Value);
         } catch (Exception ex) {
             Plugin.Log.LogError($"NeedPremium.PremiumObtain failed: {ex}");
             return magnitude;
@@ -84,6 +84,8 @@ static class NeedPremiumAccept {
         typeof(CompanyCost), "op_Multiply", new[] { typeof(CompanyCost), typeof(CompanyCost) });
     static readonly MethodInfo Helper = AccessTools.Method(
         typeof(NeedPremiumHooks), nameof(NeedPremiumHooks.PremiumAccept));
+
+    static bool Prepare() => Services.Config.MasterEnable.Value && Services.Config.NeedPremiumEnable.Value;
 
     static MethodBase TargetMethod() => NeedPremiumHooks.MoveNextOf(typeof(IsOfferViable), "TaskFunction");
 
@@ -120,6 +122,8 @@ static class NeedPremiumBid {
         typeof(CompanyDefinition.CompanyAIConfig), nameof(CompanyDefinition.CompanyAIConfig.makeOfferUnitCostMultiplier));
     static readonly MethodInfo Helper = AccessTools.Method(
         typeof(NeedPremiumHooks), nameof(NeedPremiumHooks.PremiumBid));
+
+    static bool Prepare() => Services.Config.MasterEnable.Value && Services.Config.NeedPremiumEnable.Value;
 
     static MethodBase TargetMethod() => NeedPremiumHooks.MoveNextOf(typeof(MakeOfferPriorityGate), "InternalGetCost");
 
@@ -158,6 +162,8 @@ static class NeedPremiumObtain {
     static readonly MethodInfo Magnitude = AccessTools.PropertyGetter(typeof(CompanyCost), nameof(CompanyCost.Magnitude));
     static readonly MethodInfo Helper = AccessTools.Method(
         typeof(NeedPremiumHooks), nameof(NeedPremiumHooks.PremiumObtain));
+
+    static bool Prepare() => Services.Config.MasterEnable.Value && Services.Config.NeedPremiumEnable.Value;
 
     static MethodBase TargetMethod() => NeedPremiumHooks.MoveNextOf(typeof(BuyFromOffersPriorityGate), "Calc");
 

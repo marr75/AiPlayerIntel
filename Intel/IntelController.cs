@@ -1,4 +1,5 @@
 using System;
+using AiPlayerIntel.Core;
 using AiPlayerIntel.Ui;
 using Cysharp.Threading.Tasks;
 using Manager;
@@ -32,9 +33,9 @@ sealed class IntelController : MonoBehaviour {
     }
 
     void Update() {
-        if (Input.GetKeyDown(Plugin.ToggleKey.Value)) { IntelPanel.Toggle(); }
+        if (Input.GetKeyDown(Services.Config.ToggleKey.Value)) { IntelPanel.Toggle(); }
         _accum += Time.deltaTime;
-        if (_accum >= Mathf.Clamp(Plugin.RefreshSeconds.Value, 1f, 30f) && !_refreshInFlight) {
+        if (_accum >= Mathf.Clamp(Services.Config.RefreshSeconds.Value, 1f, 30f) && !_refreshInFlight) {
             _accum = 0f;
             Refresh().Forget();
         }

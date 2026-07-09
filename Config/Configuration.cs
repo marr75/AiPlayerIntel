@@ -1,4 +1,5 @@
 using BepInEx.Configuration;
+using UnityEngine;
 
 namespace AiPlayerIntel.Config;
 
@@ -6,11 +7,19 @@ enum MarketBuyOrder { Vanilla, ContractFirst, ContractOnly }
 enum MarketBuySequence { FarthestBehind, PriceAscending, PriceDescending }
 enum RecomputeCadence { Daily, OnContractComplete }
 
-sealed class Cfg {
+sealed class Configuration {
+    public readonly ConfigEntry<KeyCode> ToggleKey;
+    public readonly ConfigEntry<float> RefreshSeconds;
+
     public readonly ConfigEntry<bool> MasterEnable;
     public readonly ConfigEntry<MarketBuyOrder> MarketBuyOrder;
     public readonly ConfigEntry<MarketBuySequence> MarketBuySequence;
     public readonly ConfigEntry<bool> ClampBuyQuantity;
+    public readonly ConfigEntry<float> PriorityWindowDays;
+    public readonly ConfigEntry<float> GrantLeaseDays;
+    public readonly ConfigEntry<bool> PremiumOrdering;
+
+    public readonly ConfigEntry<bool> ObserveLogFills;
 
     public readonly ConfigEntry<bool> CatchUpEnable;
     public readonly ConfigEntry<float> CatchUpK;
@@ -29,9 +38,17 @@ sealed class Cfg {
     public readonly ConfigEntry<bool> UnstickEnable;
     public readonly ConfigEntry<float> StuckDays;
 
+    public readonly ConfigEntry<bool> PostBidsEnable;
+    public readonly ConfigEntry<float> PostBidsTimeThreshold;
+
     public readonly ConfigEntry<bool> ShowAllMarkets;
 
-    public Cfg(ConfigFile c) {
+    public Configuration(ConfigFile c) {
+        ToggleKey = c.Bind("General", "ToggleKey", KeyCode.F10,
+            "Open/close the AI Player Intel panel.");
+        RefreshSeconds = c.Bind("General", "RefreshSeconds", 4f,
+            "Seconds between snapshot recomputes (clamped 1-30).");
+
         MasterEnable = c.Bind("Gate", "MasterEnable", true,
             "Master kill-switch for all behaviour patches (zero-demand gate + buy-quantity clamp).");
         MarketBuyOrder = c.Bind("Gate", "MarketBuyOrder", Config.MarketBuyOrder.ContractFirst,
@@ -45,6 +62,26 @@ sealed class Cfg {
             + "willing buyer first. PriceDescending = most-willing first. Sequencing is arbiter-gated (slice 7).");
         ClampBuyQuantity = c.Bind("Gate", "ClampBuyQuantity", true,
             "Clamp an AI buy to its outstanding reservation-netted deficit.");
+        PriorityWindowDays = c.Bind("Gate", "PriorityWindowDays",
+            3f, new ConfigDescription(
+                "Arbiter priority window (game-days) per contested player-sell offer. While open, non-best-fit "
+                + "buyers defer to the ranked winner; once it expires the offer falls back to vanilla first-come "
+                + "so an offer never stalls. Keep short (a few days) so a transient-demand teardown can't strand it.",
+                new AcceptableValueRange<float>(1f, 30f)));
+        GrantLeaseDays = c.Bind("Gate", "GrantLeaseDays",
+            2f, new ConfigDescription(
+                "Arbiter grant lease (game-days). A granted buyer holds exclusive claim for this long; on expiry "
+                + "the grant is released (and re-ranked) so a crashed or declining evaluation can't park the others "
+                + "forever. Keep below PriorityWindowDays.",
+                new AcceptableValueRange<float>(0.5f, 15f)));
+        PremiumOrdering = c.Bind("Gate", "PremiumOrdering", true,
+            "For the PriceAscending/PriceDescending sub-orders, rank contesters by their per-buyer willingness "
+            + "(Willingness.WhatWillPay). Off = cheap fallback: rank by outstanding deficit magnitude. "
+            + "FarthestBehind ignores this (it ranks by standing).");
+
+        ObserveLogFills = c.Bind("Observe", "LogFills", true,
+            "Log every committed AI market fill (buyer, resource, quantity, need class) for telemetry. "
+            + "Observe-only; never blocks a buy.");
 
         CatchUpEnable = c.Bind("CatchUp", "Enabled", false,
             "Price-space catch-up: a trailing AI (fewer completed contracts than the leader) weights its "
@@ -99,6 +136,18 @@ sealed class Cfg {
             30f, new ConfigDescription(
                 "Game-days a first-incomplete objective may stall before a resource-zap.",
                 new AcceptableValueRange<float>(5f, 365f)));
+
+        PostBidsEnable = c.Bind("PostBids", "Enabled", false,
+            "AI companies post standing BUY offers more readily. Vanilla only advertises a buy bid when its "
+            + "cheapest self-source path is at least makeOfferTimeThreshold (365) game-days out; lowering that "
+            + "gate (TimeThreshold) makes an AI post buy orders for needs it would otherwise self-source, giving "
+            + "the player more orders to fill. Behaviour-changing; default off.");
+        PostBidsTimeThreshold = c.Bind("PostBids", "TimeThreshold",
+            365f, new ConfigDescription(
+                "The self-source-time gate (game-days) at/above which an AI posts a buy bid instead of doing it "
+                + "itself. Vanilla is 365. Lower it to make AIs bid sooner and more often; only ever lowers a "
+                + "company's gate, never raises it (a no-op at 365). Live-retunable.",
+                new AcceptableValueRange<float>(30f, 365f)));
 
         ShowAllMarkets = c.Bind("Intel", "ShowAllMarkets", true,
             "Compute max-viable-price (Max Buy) for every resource x market, not just BOM/posted rows. "

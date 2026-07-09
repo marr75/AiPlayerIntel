@@ -11,12 +11,12 @@ namespace AiPlayerIntel.Core;
 // CatchUpFactor (price-space, this slice) and Trailing (ordering-space, slice 7's FarthestBehind).
 // Cached; refreshed once per game day to avoid re-counting allContracts on every Magnitude call.
 sealed class StandingService {
-    readonly Cfg _cfg;
+    readonly Configuration _cfg;
     readonly Dictionary<string, int> _completed = new();
     int _leader;
     int _lastDay = int.MinValue;
 
-    public StandingService(Cfg cfg) { _cfg = cfg; }
+    public StandingService(Configuration cfg) { _cfg = cfg; }
 
     // leader - CompletedCount(c); 0 for the leader or the player. Ordering-space (slice 7).
     public int Trailing(Company c) {
