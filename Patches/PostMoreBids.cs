@@ -19,7 +19,8 @@ static class PostBidsHooks {
         try {
             var threshold = Services.Config.PostBidsTimeThreshold.Value;
             return threshold < vanilla ? threshold : vanilla;
-        } catch (Exception ex) {
+        }
+        catch (Exception ex) {
             Plugin.Log.LogError($"PostBids.TimeGate failed: {ex}");
             return vanilla;
         }

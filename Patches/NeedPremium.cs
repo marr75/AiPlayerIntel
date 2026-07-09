@@ -32,7 +32,8 @@ static class NeedPremiumHooks {
                     task.howMuch.Value,
                     Services.Config.NeedPremiumApplyToAccepts.Value
                 );
-        } catch (Exception ex) {
+        }
+        catch (Exception ex) {
             Plugin.Log.LogError($"NeedPremium.PremiumAccept failed: {ex}");
             return cost;
         }
@@ -52,7 +53,8 @@ static class NeedPremiumHooks {
                     gate.howMuch.Value,
                     Services.Config.NeedPremiumApplyToPostedBids.Value
                 );
-        } catch (Exception ex) {
+        }
+        catch (Exception ex) {
             Plugin.Log.LogError($"NeedPremium.PremiumBid failed: {ex}");
             return price;
         }
@@ -77,7 +79,8 @@ static class NeedPremiumHooks {
                     quantity,
                     Services.Config.NeedPremiumApplyToProactiveObtain.Value
                 );
-        } catch (Exception ex) {
+        }
+        catch (Exception ex) {
             Plugin.Log.LogError($"NeedPremium.PremiumObtain failed: {ex}");
             return magnitude;
         }
@@ -86,7 +89,9 @@ static class NeedPremiumHooks {
     internal static MethodBase MoveNextOf(Type declaring, string asyncMethod) {
         var method = AccessTools.Method(declaring, asyncMethod);
         var stateMachineType = method?.GetCustomAttribute<AsyncStateMachineAttribute>()?.StateMachineType;
-        return stateMachineType != null ? AccessTools.Method(stateMachineType, nameof(IAsyncStateMachine.MoveNext)) : null!;
+        return stateMachineType != null
+            ? AccessTools.Method(stateMachineType, nameof(IAsyncStateMachine.MoveNext))
+            : null!;
     }
 }
 

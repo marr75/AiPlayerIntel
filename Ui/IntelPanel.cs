@@ -20,9 +20,7 @@ sealed class IntelPanel : MonoBehaviour {
 
     // indent fixed; data columns flex by ratio so they scale with window resize.
     // resource 3, max buy 3, have 1, want 1, eta 2 — header and leaves share this authority.
-    static readonly (float width, float flexWidth)[] Cols = {
-        (16, 0), (0, 3), (0, 3), (0, 1), (0, 1), (0, 2),
-    };
+    static readonly (float width, float flexWidth)[] Cols = { (16, 0), (0, 3), (0, 3), (0, 1), (0, 1), (0, 2) };
 
     static readonly FieldInfo? ShowField =
         typeof(NotificationManager).GetField("showNotificationHistory", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -47,7 +45,7 @@ sealed class IntelPanel : MonoBehaviour {
     IntelPanelWidgets.TabButton _tradeTab;
     IntelPanelWidgets _widgets = null!;
 
-    internal ViewState State => _controller.State;
+    internal ViewState State { get => _controller.State; }
 
     void Update() {
         if (AnyPointerHeld()) { _pointerHeldUntil = Time.unscaledTime + 0.25f; }
@@ -90,11 +88,14 @@ sealed class IntelPanel : MonoBehaviour {
             rectTransform.pivot = new Vector2(0f, 1f);
             rectTransform.sizeDelta = PanelLayout.Size;
             rectTransform.anchoredPosition = new Vector2(-9999f, -9999f);
-            (panelGameObject.GetComponent<LayoutElement>() ?? panelGameObject.AddComponent<LayoutElement>()).ignoreLayout = true;
+            (panelGameObject.GetComponent<LayoutElement>() ?? panelGameObject.AddComponent<LayoutElement>())
+                .ignoreLayout = true;
 
             var theme = IntelPanelWidgets.SampleBackground(panelGameObject);
             for (var i = rectTransform.childCount - 1; i >= 0; i--) { Destroy(rectTransform.GetChild(i).gameObject); }
-            foreach (var canvasGroup in panelGameObject.GetComponents<CanvasGroup>()) { canvasGroup.interactable = canvasGroup.blocksRaycasts = true; }
+            foreach (var canvasGroup in panelGameObject.GetComponents<CanvasGroup>()) {
+                canvasGroup.interactable = canvasGroup.blocksRaycasts = true;
+            }
             foreach (var scrollRect in panelGameObject.GetComponents<ScrollRect>()) { DestroyImmediate(scrollRect); }
             foreach (var layoutGroup in panelGameObject.GetComponents<LayoutGroup>()) { DestroyImmediate(layoutGroup); }
             if (panelGameObject.GetComponent<ContentSizeFitter>() is { } sizeFitter) { DestroyImmediate(sizeFitter); }
@@ -105,7 +106,8 @@ sealed class IntelPanel : MonoBehaviour {
             panel.Init(showButton, content, font);
             _instance = panel;
             Plugin.Log.LogInfo("AI Player Intel UGUI panel injected.");
-        } catch (Exception exception) {
+        }
+        catch (Exception exception) {
             Plugin.Log.LogWarning($"AI Player Intel: UGUI panel injection failed: {exception}");
         }
     }
@@ -142,7 +144,9 @@ sealed class IntelPanel : MonoBehaviour {
         if (state.Sort != column) {
             state.Sort = column;
             state.Desc = false;
-        } else if (!state.Desc) { state.Desc = true; } else {
+        }
+        else if (!state.Desc) { state.Desc = true; }
+        else {
             state.Sort = SortCol.Default;
             state.Desc = false;
         }
@@ -220,11 +224,15 @@ sealed class IntelPanel : MonoBehaviour {
         _widgets.AddColumn(row, Cols[3], IntelFormat.Have(intelRow.Line));
         _widgets.AddColumn(row, Cols[4], IntelFormat.Want(intelRow.Line));
         _widgets.AddColumn(row, Cols[5], IntelFormat.RateEta(intelRow.Line));
-        if (intelRow.Line.MaxBid is { } bid && intelRow.Line.Rd is { } resourceDefinition && intelRow.Body is { } body) {
-            IntelPanelWidgets.MakeClickable(row, () => IntelActions.OpenOffer(body, resourceDefinition, bid, intelRow.Line.PriceQty));
-        } else {
-            IntelPanelWidgets.MakeClickable(row, () => IntelActions.OpenMarket(intelRow.Body));
+        if (intelRow.Line.MaxBid is { } bid
+            && intelRow.Line.Rd is { } resourceDefinition
+            && intelRow.Body is { } body) {
+            IntelPanelWidgets.MakeClickable(
+                row,
+                () => IntelActions.OpenOffer(body, resourceDefinition, bid, intelRow.Line.PriceQty)
+            );
         }
+        else { IntelPanelWidgets.MakeClickable(row, () => IntelActions.OpenMarket(intelRow.Body)); }
     }
 
     string Signature(List<RowVm> rows) {
@@ -238,7 +246,11 @@ sealed class IntelPanel : MonoBehaviour {
             .Append(state.Filter)
             .Append('\n');
         foreach (var rowViewModel in rows) {
-            builder.Append((int)rowViewModel.Kind).Append(rowViewModel.Depth).Append(rowViewModel.Expanded ? '+' : '-').Append(rowViewModel.LeafCount).Append('|');
+            builder.Append((int)rowViewModel.Kind)
+                .Append(rowViewModel.Depth)
+                .Append(rowViewModel.Expanded ? '+' : '-')
+                .Append(rowViewModel.LeafCount)
+                .Append('|');
             if (rowViewModel.Kind == RowKind.Leaf && rowViewModel.Detail is { } intelRow) {
                 var line = intelRow.Line;
                 builder.Append(line.Resource)
@@ -252,12 +264,15 @@ sealed class IntelPanel : MonoBehaviour {
                     .Append(IntelFormat.RateEta(line))
                     .Append('|')
                     .Append(line.ResourceIcon != null ? line.ResourceIcon.name : "");
-            } else {
+            }
+            else {
                 builder.Append(rowViewModel.Label).Append('|').Append(rowViewModel.IsHq ? 'H' : '-');
                 if (rowViewModel.Kind == RowKind.CompanyHeader) {
                     builder.Append(rowViewModel.TimeValuePerDay.ToString("0.##")).Append(rowViewModel.CostCalcType);
                 }
-                if (rowViewModel.Objective is { } objective) { builder.Append(objective.ContractTitle).Append(objective.CurrentStepText).Append(objective.Type); }
+                if (rowViewModel.Objective is { } objective) {
+                    builder.Append(objective.ContractTitle).Append(objective.CurrentStepText).Append(objective.Type);
+                }
             }
             builder.Append('\n');
         }

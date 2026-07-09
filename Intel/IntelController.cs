@@ -18,7 +18,7 @@ sealed class IntelController : MonoBehaviour {
     bool _diyActive = true;
     internal static IntelController? Instance { get; private set; }
 
-    internal IntelSnapshot Current => _current;
+    internal IntelSnapshot Current { get => _current; }
     internal bool InFlight { get; private set; }
 
     void Update() {
@@ -52,11 +52,9 @@ sealed class IntelController : MonoBehaviour {
             UpdateDiyGate();
             _current = await Collectors.Build(_diyActive);
             Changed?.Invoke();
-        } catch (Exception exception) {
-            Plugin.Log.LogWarning($"AI Player Intel refresh failed: {exception.Message}");
-        } finally {
-            InFlight = false;
         }
+        catch (Exception exception) { Plugin.Log.LogWarning($"AI Player Intel refresh failed: {exception.Message}"); }
+        finally { InFlight = false; }
     }
 
     void UpdateDiyGate() {

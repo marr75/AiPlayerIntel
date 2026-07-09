@@ -1,80 +1,80 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net48</TargetFramework>
-    <AssemblyName>AiPlayerIntel</AssemblyName>
-    <Product>AiPlayerIntel</Product>
-    <Version>0.1.0</Version>
-    <BepInExPluginGuid>matt.solarexpanse.aiplayerintel</BepInExPluginGuid>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net48</TargetFramework>
+        <AssemblyName>AiPlayerIntel</AssemblyName>
+        <Product>AiPlayerIntel</Product>
+        <Version>0.1.0</Version>
+        <BepInExPluginGuid>matt.solarexpanse.aiplayerintel</BepInExPluginGuid>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="BepInEx.Core" Version="5.4.21"/>
-    <PackageReference Include="BepInEx.PluginInfoProps" Version="2.1.0"/>
-    <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.2" PrivateAssets="all"/>
-    <PackageReference Include="PolySharp" Version="1.16.0" PrivateAssets="all"/>
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="BepInEx.Core" Version="5.4.21"/>
+        <PackageReference Include="BepInEx.PluginInfoProps" Version="2.1.0"/>
+        <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.2" PrivateAssets="all"/>
+        <PackageReference Include="PolySharp" Version="1.16.0" PrivateAssets="all"/>
+    </ItemGroup>
 
-  <ItemGroup>
-    <Reference Include="Assembly-CSharp">
-      <HintPath>$(ManagedDir)\Assembly-CSharp.dll</HintPath>
-      <Private>false</Private>
-      <Publicize>true</Publicize>
-    </Reference>
-    <Reference Include="UniTask">
-      <HintPath>$(ManagedDir)\UniTask.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine">
-      <HintPath>$(ManagedDir)\UnityEngine.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.CoreModule">
-      <HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.IMGUIModule">
-      <HintPath>$(ManagedDir)\UnityEngine.IMGUIModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.InputLegacyModule">
-      <HintPath>$(ManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.TextRenderingModule">
-      <HintPath>$(ManagedDir)\UnityEngine.TextRenderingModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.UIModule">
-      <HintPath>$(ManagedDir)\UnityEngine.UIModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.UI">
-      <HintPath>$(ManagedDir)\UnityEngine.UI.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Unity.TextMeshPro">
-      <HintPath>$(ManagedDir)\Unity.TextMeshPro.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <!-- CompanyBehaviour and ObtainResourcePriorityGate derive from BehaviorDesigner
-         base types; needed for base-type resolution. -->
-    <Reference Include="BehaviorDesigner.Runtime">
-      <HintPath>$(ManagedDir)\BehaviorDesigner.Runtime.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <!-- Game ScriptableObject/MonoBehaviour types derive from Sirenix base types;
-         needed for base-type resolution. -->
-    <Reference Include="Sirenix.Serialization">
-      <HintPath>$(ManagedDir)\Sirenix.Serialization.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-  </ItemGroup>
+    <ItemGroup>
+        <Reference Include="Assembly-CSharp">
+            <HintPath>$(ManagedDir)\Assembly-CSharp.dll</HintPath>
+            <Private>false</Private>
+            <Publicize>true</Publicize>
+        </Reference>
+        <Reference Include="UniTask">
+            <HintPath>$(ManagedDir)\UniTask.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine">
+            <HintPath>$(ManagedDir)\UnityEngine.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.CoreModule">
+            <HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.IMGUIModule">
+            <HintPath>$(ManagedDir)\UnityEngine.IMGUIModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.InputLegacyModule">
+            <HintPath>$(ManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.TextRenderingModule">
+            <HintPath>$(ManagedDir)\UnityEngine.TextRenderingModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.UIModule">
+            <HintPath>$(ManagedDir)\UnityEngine.UIModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.UI">
+            <HintPath>$(ManagedDir)\UnityEngine.UI.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="Unity.TextMeshPro">
+            <HintPath>$(ManagedDir)\Unity.TextMeshPro.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <!-- CompanyBehaviour and ObtainResourcePriorityGate derive from BehaviorDesigner
+             base types; needed for base-type resolution. -->
+        <Reference Include="BehaviorDesigner.Runtime">
+            <HintPath>$(ManagedDir)\BehaviorDesigner.Runtime.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <!-- Game ScriptableObject/MonoBehaviour types derive from Sirenix base types;
+             needed for base-type resolution. -->
+        <Reference Include="Sirenix.Serialization">
+            <HintPath>$(ManagedDir)\Sirenix.Serialization.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+    </ItemGroup>
 
-  <Target Name="DeployToPlugins" AfterTargets="Build">
-    <MakeDir Directories="$(GameDir)\BepInEx\plugins\AiPlayerIntel\"/>
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GameDir)\BepInEx\plugins\AiPlayerIntel\"/>
-    <Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFolder="$(GameDir)\BepInEx\plugins\AiPlayerIntel\" Condition="Exists('$(TargetDir)$(TargetName).pdb')"/>
-  </Target>
+    <Target Name="DeployToPlugins" AfterTargets="Build">
+        <MakeDir Directories="$(GameDir)\BepInEx\plugins\AiPlayerIntel\"/>
+        <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GameDir)\BepInEx\plugins\AiPlayerIntel\"/>
+        <Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFolder="$(GameDir)\BepInEx\plugins\AiPlayerIntel\" Condition="Exists('$(TargetDir)$(TargetName).pdb')"/>
+    </Target>
 
 </Project>

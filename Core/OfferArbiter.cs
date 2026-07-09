@@ -23,14 +23,19 @@ sealed class OfferArbiter {
     readonly StandingService _standing;
     readonly Willingness _willingness;
 
-    public OfferArbiter(Configuration config, DeficitService deficit, StandingService standing, Willingness willingness) {
+    public OfferArbiter(
+        Configuration config,
+        DeficitService deficit,
+        StandingService standing,
+        Willingness willingness
+    ) {
         _config = config;
         _deficit = deficit;
         _standing = standing;
         _willingness = willingness;
     }
 
-    bool Active => _config != null && _config.MasterEnable.Value;
+    bool Active { get => _config != null && _config.MasterEnable.Value; }
 
     // MarketOfferManager.AddOffer Postfix — build the record for a freshly posted player SELL offer.
     // Early-out on save-load replay (AddOffer skips the OnNewOffer fan-out then; rebuild lazily at the gate).
@@ -39,9 +44,8 @@ sealed class OfferArbiter {
             if (!Active || offer == null || LoadSaveManager.OnExtractAllFromSaveData) { return; }
             if (!IsTracked(offer)) { return; }
             _records[offer.ID] = BuildRecord(offer);
-        } catch (Exception e) {
-            Plugin.Log.LogWarning($"OfferArbiter.OnOfferPosted failed (fail-open): {e.Message}");
         }
+        catch (Exception e) { Plugin.Log.LogWarning($"OfferArbiter.OnOfferPosted failed (fail-open): {e.Message}"); }
     }
 
     // LockOffer.OnUpdate acquire Prefix — true = defer (park at Running), false = let vanilla acquire run.
@@ -57,12 +61,15 @@ sealed class OfferArbiter {
             if (offer.CountLeft <= 0.0 || now >= record.WindowUntil) { return false; } // window closed → vanilla
 
             if (record.GrantedTo != null) {
-                if (now < record.LeaseUntil) { return record.GrantedTo != company; } // live grant: defer everyone but grantee
+                if (now < record.LeaseUntil) {
+                    return record.GrantedTo != company;
+                } // live grant: defer everyone but grantee
                 if (offer.CountLeft < record.CountLeftAtGrant) {
                     // grantee bought → re-rank on fresh CountLeft
                     record.GrantedTo = null;
                     record.Ranked = Rank(offer);
-                } else {
+                }
+                else {
                     // grantee declined → skip it next
                     record.Declined.Add(record.GrantedTo);
                     record.GrantedTo = null;
@@ -76,7 +83,8 @@ sealed class OfferArbiter {
             record.LeaseUntil = now.AddDays(Math.Max(0.5, _config.GrantLeaseDays.Value));
             record.CountLeftAtGrant = offer.CountLeft;
             return false;
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             Plugin.Log.LogWarning($"OfferArbiter.ShouldDefer failed (fail-open): {e.Message}");
             return false;
         }
@@ -89,7 +97,8 @@ sealed class OfferArbiter {
             if (!_records.TryGetValue(offer.ID, out var record) || record.GrantedTo == null) { return false; }
             if (Now() >= record.LeaseUntil) { return false; } // stale grant → allow
             return record.GrantedTo != buyer;
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             Plugin.Log.LogWarning($"OfferArbiter.VetoCommit failed (fail-open): {e.Message}");
             return false;
         }
@@ -106,10 +115,7 @@ sealed class OfferArbiter {
     }
 
     Record BuildRecord(Offer offer) =>
-        new() {
-            Ranked = Rank(offer),
-            WindowUntil = Now().AddDays(Math.Max(1.0, _config.PriorityWindowDays.Value)),
-        };
+        new() { Ranked = Rank(offer), WindowUntil = Now().AddDays(Math.Max(1.0, _config.PriorityWindowDays.Value)) };
 
     // Two passes: MarketBuyOrder cohort (Tier), then MarketBuySequence sub-order within cohort.
     List<Candidate> Rank(Offer offer) {
@@ -155,11 +161,16 @@ sealed class OfferArbiter {
         double claimCap
     ) {
         switch (sequence) {
-            case MarketBuySequence.FarthestBehind: return -_standing.Trailing(companyBehaviour.Company); // largest standing gap first
+            case MarketBuySequence.FarthestBehind:
+                return -_standing.Trailing(companyBehaviour.Company); // largest standing gap first
             case MarketBuySequence.PriceAscending:
-                return _config.PremiumOrdering.Value ? _willingness.WhatWillPay(companyBehaviour, where, resourceDefinition, claimCap) : -deficit.UnmetVsDemand;
+                return _config.PremiumOrdering.Value
+                    ? _willingness.WhatWillPay(companyBehaviour, where, resourceDefinition, claimCap)
+                    : -deficit.UnmetVsDemand;
             case MarketBuySequence.PriceDescending:
-                return _config.PremiumOrdering.Value ? -_willingness.WhatWillPay(companyBehaviour, where, resourceDefinition, claimCap) : -deficit.UnmetVsDemand;
+                return _config.PremiumOrdering.Value
+                    ? -_willingness.WhatWillPay(companyBehaviour, where, resourceDefinition, claimCap)
+                    : -deficit.UnmetVsDemand;
             default: return 0.0;
         }
     }

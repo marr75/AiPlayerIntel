@@ -30,7 +30,9 @@ sealed class Willingness {
         double howMuch,
         bool surfaceOn
     ) {
-        if (_config == null || !_config.MasterEnable.Value || !_config.NeedPremiumEnable.Value || !surfaceOn) { return 1.0; }
+        if (_config == null || !_config.MasterEnable.Value || !_config.NeedPremiumEnable.Value || !surfaceOn) {
+            return 1.0;
+        }
         if (companyBehaviour == null || where == null || resourceDefinition == null) { return 1.0; }
 
         var deficit = _deficit.Evaluate(companyBehaviour, where, resourceDefinition);
@@ -51,7 +53,12 @@ sealed class Willingness {
 
     // Multiplier-only by design: the base DIY oracle (ObtainResourcePriorityGate.Calc) is async — it awaits four
     // sub-gates (ObtainResourcePriorityGate.cs:113/117/121/125) — so folding it into the arbiter's sync OrderBy sort key would deadlock (design §5.3).
-    public double WhatWillPay(CompanyBehaviour? companyBehaviour, ObjectInfo? where, ResourceDefinition? resourceDefinition, double quantity) {
+    public double WhatWillPay(
+        CompanyBehaviour? companyBehaviour,
+        ObjectInfo? where,
+        ResourceDefinition? resourceDefinition,
+        double quantity
+    ) {
         var company = companyBehaviour?.Company;
         var catchUp = company != null ? CostOfTimeFactor(company) : 1.0;
         return catchUp * NeedFactor(companyBehaviour, where, resourceDefinition, quantity, true);

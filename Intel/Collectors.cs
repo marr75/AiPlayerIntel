@@ -29,8 +29,9 @@ static class Collectors {
         var rows = new List<IntelRow>();
         var gameManager = MonoBehaviourSingleton<GameManager>.Instance;
         if (gameManager == null || gameManager.Companies == null) {
-            return new IntelSnapshot
-                { Companies = companies, Rows = rows, BuiltAt = Time.realtimeSinceStartup, DiyActive = diyActive };
+            return new IntelSnapshot {
+                Companies = companies, Rows = rows, BuiltAt = Time.realtimeSinceStartup, DiyActive = diyActive,
+            };
         }
 
         foreach (var company in gameManager.Companies) {
@@ -60,8 +61,9 @@ static class Collectors {
             rows.AddRange(await BuildResources(company, companyBehaviour, diyActive, bom, key));
         }
 
-        return new IntelSnapshot
-            { Companies = companies, Rows = rows, BuiltAt = Time.realtimeSinceStartup, DiyActive = diyActive };
+        return new IntelSnapshot {
+            Companies = companies, Rows = rows, BuiltAt = Time.realtimeSinceStartup, DiyActive = diyActive,
+        };
     }
 
     static bool IsParticipating(Company company, CompanyBehaviour companyBehaviour) {
@@ -69,23 +71,28 @@ static class Collectors {
         return (definition != null && definition.IsWorldGovernment) || companyBehaviour.aiEnabled;
     }
 
-    static (Objective objective, CompanyObjectiveData objectiveData, Contract running, CompanyContractData companyContractData)? GetActiveObjective(
-        Company company,
-        CompanyBehaviour companyBehaviour
-    ) {
+    static (Objective objective, CompanyObjectiveData objectiveData, Contract running, CompanyContractData
+        companyContractData)? GetActiveObjective(
+            Company company,
+            CompanyBehaviour companyBehaviour
+        ) {
         var contractManager = MonoBehaviourSingleton<ContractManager>.Instance;
         if (contractManager == null || contractManager.allContracts == null) { return null; }
 
         var activeContracts = contractManager.allContracts
-            .Where(contract => contract != null && contract.ContractStateForCompany(company) == ContractManager.EContractState.Active)
+            .Where(contract =>
+                contract != null && contract.ContractStateForCompany(company) == ContractManager.EContractState.Active
+            )
             .ToList();
         if (activeContracts.Count == 0) { return null; }
 
         var queueHead = companyBehaviour.newContractsQueue.Count > 0 ? companyBehaviour.newContractsQueue.Peek() : null;
         var running = activeContracts.FirstOrDefault(contract => contract == queueHead) ?? activeContracts[0];
 
-        if (!running.PerCompanyContractData.TryGetValue(company, out var companyContractData) || companyContractData == null) { return null; }
-        var objectiveData = companyContractData.ObjectivesDataList?.FirstOrDefault(entry => entry != null && !entry.IsComplete);
+        if (!running.PerCompanyContractData.TryGetValue(company, out var companyContractData)
+            || companyContractData == null) { return null; }
+        var objectiveData =
+            companyContractData.ObjectivesDataList?.FirstOrDefault(entry => entry != null && !entry.IsComplete);
         if (objectiveData == null) { return null; }
         var objective = objectiveData.Objective;
         if (objective == null) { return null; }
@@ -93,11 +100,18 @@ static class Collectors {
     }
 
     static ObjectiveLine? BuildObjectiveLine(
-        (Objective objective, CompanyObjectiveData objectiveData, Contract running, CompanyContractData companyContractData)? active
+        (Objective objective, CompanyObjectiveData objectiveData, Contract running, CompanyContractData
+            companyContractData)? active
     ) =>
-        active is { } activeValue ? BuildLine(activeValue.running, activeValue.companyContractData, activeValue.objectiveData) : null;
+        active is { } activeValue
+            ? BuildLine(activeValue.running, activeValue.companyContractData, activeValue.objectiveData)
+            : null;
 
-    static ObjectiveLine BuildLine(Contract running, CompanyContractData companyContractData, CompanyObjectiveData objectiveData) {
+    static ObjectiveLine BuildLine(
+        Contract running,
+        CompanyContractData companyContractData,
+        CompanyObjectiveData objectiveData
+    ) {
         var (segments, plain) = TokenizeObjective(objectiveData.GetText(false));
         var objective = objectiveData.Objective;
         return new ObjectiveLine {
@@ -114,7 +128,8 @@ static class Collectors {
     static (List<Objective> objectives, List<ObjectiveLine> secondary) CollectContractDemand(
         Company company,
         CompanyBehaviour companyBehaviour,
-        (Objective objective, CompanyObjectiveData objectiveData, Contract running, CompanyContractData companyContractData)? primary
+        (Objective objective, CompanyObjectiveData objectiveData, Contract running, CompanyContractData
+            companyContractData)? primary
     ) {
         var objectives = new List<Objective>();
         var secondary = new List<ObjectiveLine>();
@@ -122,10 +137,10 @@ static class Collectors {
         if (contractManager?.allContracts == null) { return (objectives, secondary); }
         var running = primary?.running;
         foreach (var contract in contractManager.allContracts) {
-            if (contract == null || contract.ContractStateForCompany(company) != ContractManager.EContractState.Active) { continue; }
-            if (!contract.PerCompanyContractData.TryGetValue(company, out var companyContractData) || companyContractData?.ObjectivesDataList == null) {
-                continue;
-            }
+            if (contract == null
+                || contract.ContractStateForCompany(company) != ContractManager.EContractState.Active) { continue; }
+            if (!contract.PerCompanyContractData.TryGetValue(company, out var companyContractData)
+                || companyContractData?.ObjectivesDataList == null) { continue; }
             var firstIncomplete = true;
             foreach (var objectiveData in companyContractData.ObjectivesDataList) {
                 if (objectiveData == null || objectiveData.IsComplete || objectiveData.Objective == null) { continue; }
@@ -151,9 +166,8 @@ static class Collectors {
             if (icon != null) {
                 segments.Add(new ObjSegment { Kind = ObjSegmentKind.Icon, Icon = icon, Text = inner });
                 plain.Append(inner);
-            } else {
-                AddText(segments, plain, inner);
             }
+            else { AddText(segments, plain, inner); }
             position = match.Index + match.Length;
         }
         if (position < raw!.Length) { AddText(segments, plain, raw.Substring(position)); }
@@ -166,14 +180,14 @@ static class Collectors {
         plain.Append(text);
         if (segments.Count > 0 && segments[^1].Kind == ObjSegmentKind.Text) {
             segments[^1] = new ObjSegment { Kind = ObjSegmentKind.Text, Text = segments[^1].Text + text };
-        } else {
-            segments.Add(new ObjSegment { Kind = ObjSegmentKind.Text, Text = text });
         }
+        else { segments.Add(new ObjSegment { Kind = ObjSegmentKind.Text, Text = text }); }
     }
 
     static Sprite? ResolveLinkIcon(string className, string rawId) {
         switch (className) {
-            case "ObjectInfo": return int.TryParse(rawId, out var objectId) ? ResolveObjectInfo(objectId)?.ImagePlanetUI : null;
+            case "ObjectInfo":
+                return int.TryParse(rawId, out var objectId) ? ResolveObjectInfo(objectId)?.ImagePlanetUI : null;
             case "ResourceDefinition":
                 var assembly = SerializedMonoBehaviourSingleton<AllScriptableObjectManager>.Instance;
                 var resourceDefinition = assembly?.AllResourceDefinitions?.ListNotEmpty?
@@ -200,13 +214,23 @@ static class Collectors {
             case EObjectiveType.CreateSpaceCraft:
             case EObjectiveType.CreateVehicle:
             case EObjectiveType.BuildFacility:
-                var source = objective.productItem != null ? Localize(objective.productItem) : objective.objectiveType.ToString();
+                var source = objective.productItem != null
+                    ? Localize(objective.productItem)
+                    : objective.objectiveType.ToString();
                 var price = ProductPrice(objective.productItem);
                 if (price?.ListResources != null) {
                     foreach (var resourceCost in price.ListResources) {
                         var resourceDefinition = resourceCost.ResourceDefinition;
                         if (resourceDefinition == null) { continue; }
-                        bom.Add(new BomEntry(resourceDefinition, resourceCost.Price * objective.howMuch, location, locationName, source));
+                        bom.Add(
+                            new BomEntry(
+                                resourceDefinition,
+                                resourceCost.Price * objective.howMuch,
+                                location,
+                                locationName,
+                                source
+                            )
+                        );
                     }
                 }
                 break;
@@ -242,7 +266,9 @@ static class Collectors {
         Row Get(ResourceDefinition resourceDefinition, string locationName, ObjectInfo? location) {
             var key = (resourceDefinition, locationName);
             if (!rows.TryGetValue(key, out var row)) {
-                row = new Row { ResourceDefinition = resourceDefinition, LocationName = locationName, Location = location };
+                row = new Row {
+                    ResourceDefinition = resourceDefinition, LocationName = locationName, Location = location,
+                };
                 rows[key] = row;
             }
             if (row.Location == null && location != null) { row.Location = location; }
@@ -373,7 +399,11 @@ static class Collectors {
             .ToList();
     }
 
-    static (double have, double? rate) StockAndRate(Company company, ObjectInfo? location, ResourceDefinition? resourceDefinition) {
+    static (double have, double? rate) StockAndRate(
+        Company company,
+        ObjectInfo? location,
+        ResourceDefinition? resourceDefinition
+    ) {
         if (location == null || resourceDefinition == null) { return (0, null); }
         var row = location.GetObjectInfoData(company)?.FastGetResource(resourceDefinition);
         return row != null ? (row.Value, row.Balance) : (0, null);
@@ -411,7 +441,8 @@ static class Collectors {
                 howMuch,
                 true
             );
-        } catch (Exception exception) {
+        }
+        catch (Exception exception) {
             Plugin.Log.LogWarning($"DIY calc failed for {Localize(resourceDefinition)}: {exception.Message}");
             return null;
         }
@@ -458,7 +489,13 @@ static class Collectors {
         public readonly string LocationName;
         public readonly string SourceLabel;
 
-        public BomEntry(ResourceDefinition resourceDefinition, double quantity, ObjectInfo? location, string locationName, string sourceLabel) {
+        public BomEntry(
+            ResourceDefinition resourceDefinition,
+            double quantity,
+            ObjectInfo? location,
+            string locationName,
+            string sourceLabel
+        ) {
             ResourceDefinition = resourceDefinition;
             Quantity = quantity;
             Location = location;
@@ -485,8 +522,8 @@ static class Collectors {
         public double PriceQty;
         public double PrimaryQty;
         public double? Rate;
-        public ResourceDefinition? ResourceDefinition;
         public double Reservation;
+        public ResourceDefinition? ResourceDefinition;
         public string SourceObjective = "";
         public ResourceState State;
     }

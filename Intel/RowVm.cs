@@ -5,7 +5,14 @@ namespace AiPlayerIntel.Intel;
 
 enum RowKind { BodyHeader, CompanyHeader, Objective, Leaf, Note }
 
-enum SortCol { Default, Resource, Have, Want, Eta, MaxBuy }
+enum SortCol {
+    Default,
+    Resource,
+    Have,
+    Want,
+    Eta,
+    MaxBuy,
+}
 
 enum Tab { Trade, Other }
 

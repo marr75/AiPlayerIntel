@@ -39,7 +39,9 @@ sealed class StuckWatch : MonoBehaviour {
         var gameManager = MonoBehaviourSingleton<GameManager>.Instance;
         var contractManager = MonoBehaviourSingleton<ContractManager>.Instance;
         var timeController = MonoBehaviourSingleton<TimeController>.Instance;
-        if (gameManager?.Companies == null || contractManager?.allContracts == null || timeController == null) { return; }
+        if (gameManager?.Companies == null || contractManager?.allContracts == null || timeController == null) {
+            return;
+        }
 
         var today = timeController.TotalDays;
         var stuckDays = (int)Mathf.Clamp(Services.Config.StuckDays.Value, 5f, 365f);
@@ -86,7 +88,9 @@ sealed class StuckWatch : MonoBehaviour {
 
         foreach (var line in _deficit.CreditableLines(objective)) {
             var resourceDefinition = line.Rd;
-            if (resourceDefinition == null || line.Need <= 0 || objectInfoData.FastGetResource(resourceDefinition) == null) { continue; }
+            if (resourceDefinition == null
+                || line.Need <= 0
+                || objectInfoData.FastGetResource(resourceDefinition) == null) { continue; }
             var deficit = _deficit.Evaluate(companyBehaviour, where, resourceDefinition, line.Need);
             if (deficit.UnmetVsNeed <= 0) { continue; }
             objectInfoData.AddResources(resourceDefinition, deficit.UnmetVsNeed);
@@ -104,7 +108,10 @@ sealed class StuckWatch : MonoBehaviour {
         if (marketOfferManager?.Offerts == null) { return; }
         Offer? match = null;
         foreach (var offer in marketOfferManager.Offerts) {
-            if (offer is { BuySell: true } && offer.Company == company && offer.WhereOffer == where && offer.Rd == resourceDefinition) {
+            if (offer is { BuySell: true }
+                && offer.Company == company
+                && offer.WhereOffer == where
+                && offer.Rd == resourceDefinition) {
                 match = offer;
                 break;
             }

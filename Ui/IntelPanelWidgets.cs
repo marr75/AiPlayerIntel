@@ -19,9 +19,7 @@ sealed class IntelPanelWidgets {
 
     readonly TMP_FontAsset? _font;
 
-    internal IntelPanelWidgets(TMP_FontAsset? font) {
-        _font = font;
-    }
+    internal IntelPanelWidgets(TMP_FontAsset? font) { _font = font; }
 
     internal static PanelTheme SampleBackground(GameObject panelGameObject) {
         Sprite? sprite = null;
@@ -144,7 +142,12 @@ sealed class IntelPanelWidgets {
         return gameObject;
     }
 
-    internal TextMeshProUGUI AddColumn(GameObject row, (float width, float flexWidth) column, string text, Sprite? icon = null) {
+    internal TextMeshProUGUI AddColumn(
+        GameObject row,
+        (float width, float flexWidth) column,
+        string text,
+        Sprite? icon = null
+    ) {
         var gameObject = new GameObject("Col", typeof(RectTransform));
         gameObject.transform.SetParent(row.transform, false);
         var layoutElement = gameObject.AddComponent<LayoutElement>();
@@ -237,13 +240,16 @@ sealed class IntelPanelWidgets {
                 var text = rowViewModel.Label;
                 if (rowViewModel.IsHq) { text += IntelFormat.HqTag.text; }
                 if (rowViewModel.TimeValuePerDay > 0) {
-                    text += $"    time value {IntelFormat.Money(rowViewModel.TimeValuePerDay)}/day ({rowViewModel.CostCalcType})";
+                    text +=
+                        $"    time value {IntelFormat.Money(rowViewModel.TimeValuePerDay)}/day ({rowViewModel.CostCalcType})";
                 }
                 return $"{text}   ({rowViewModel.LeafCount})";
             }
             case RowKind.Objective: {
                 var text = "→ " + rowViewModel.Label;
-                if (rowViewModel.Objective is { } objective && objective.CurrentStepText.Length > 0) { text += "  —  " + objective.CurrentStepText; }
+                if (rowViewModel.Objective is { } objective && objective.CurrentStepText.Length > 0) {
+                    text += "  —  " + objective.CurrentStepText;
+                }
                 return text;
             }
             default: return rowViewModel.Label;
@@ -406,7 +412,8 @@ sealed class DraggableMover : MonoBehaviour,
     IEnumerator Start() {
         yield return null;
         yield return null;
-        if (PanelLayout.Saved) { RestoreNormalized(); } else { PositionUnderButton(); }
+        if (PanelLayout.Saved) { RestoreNormalized(); }
+        else { PositionUnderButton(); }
         if (_canvasRectTransform != null) { _lastCanvasSize = _canvasRectTransform.rect.size; }
     }
 
@@ -436,10 +443,17 @@ sealed class DraggableMover : MonoBehaviour,
 
     void PositionUnderButton() {
         if (ShowBtn == null || _canvasRectTransform == null) { return; }
-        var worldCamera = _canvas != null && _canvas.renderMode != RenderMode.ScreenSpaceOverlay ? _canvas.worldCamera : null;
+        var worldCamera = _canvas != null && _canvas.renderMode != RenderMode.ScreenSpaceOverlay
+            ? _canvas.worldCamera
+            : null;
         var corners = new Vector3[4];
         ShowBtn.GetWorldCorners(corners);
-        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_canvasRectTransform, corners[0], worldCamera, out var local)) {
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                _canvasRectTransform,
+                corners[0],
+                worldCamera,
+                out var local
+            )) {
             Panel.anchoredPosition = new Vector2(local.x, local.y - 40f);
             Clamp();
             StoreNormalized();

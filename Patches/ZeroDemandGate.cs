@@ -27,7 +27,9 @@ static class ZeroDemandGate {
 
         var config = Services.Config;
         var deficit = Services.Deficit.Evaluate(companyBehaviour, where, resourceDefinition);
-        if (config.MarketBuyOrder.Value == MarketBuyOrder.ContractOnly && deficit.UnmetVsDemand <= 0 && !deficit.InBom) {
+        if (config.MarketBuyOrder.Value == MarketBuyOrder.ContractOnly
+            && deficit.UnmetVsDemand <= 0
+            && !deficit.InBom) {
             __result = TaskStatus.Failure; // need-less → reject; Vanilla/ContractFirst = no eligibility flip (§2e)
             return;
         }

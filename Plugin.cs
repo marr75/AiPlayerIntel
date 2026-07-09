@@ -35,12 +35,8 @@ public class Plugin : BaseUnityPlugin {
         var harmony = new Harmony(MyPluginInfo.PLUGIN_GUID);
         foreach (var type in Assembly.GetExecutingAssembly().GetTypes()) {
             if (!type.GetCustomAttributes<HarmonyPatch>().Any()) { continue; }
-            try {
-                harmony.CreateClassProcessor(type).Patch();
-            }
-            catch (Exception ex) {
-                Log.LogError($"Failed to patch {type.FullName}: {ex}");
-            }
+            try { harmony.CreateClassProcessor(type).Patch(); }
+            catch (Exception ex) { Log.LogError($"Failed to patch {type.FullName}: {ex}"); }
         }
     }
 }

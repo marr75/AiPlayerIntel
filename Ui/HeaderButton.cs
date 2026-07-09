@@ -118,9 +118,8 @@ sealed class HeaderButton : MonoBehaviour,
                 background.sprite = sourceImage.sprite;
                 background.type = sourceImage.type;
                 background.color = sourceImage.color;
-            } else {
-                background.color = new Color(0.15f, 0.15f, 0.2f, 0.9f);
             }
+            else { background.color = new Color(0.15f, 0.15f, 0.2f, 0.9f); }
 
             MakeLabel(gameObject, font);
 
@@ -132,19 +131,27 @@ sealed class HeaderButton : MonoBehaviour,
             headerButton._showButtonRectTransform = showButton.GetComponent<RectTransform>();
             headerButton._onClick = IntelPanel.Toggle;
             Plugin.Log.LogInfo("AI Player Intel header button injected.");
-        } catch (Exception exception) {
+        }
+        catch (Exception exception) {
             Plugin.Log.LogWarning($"AI Player Intel: header button injection failed: {exception.Message}");
         }
     }
 
     void PositionNextToNotificationButton() {
         if (_showButtonRectTransform == null || _canvasRectTransform == null) { return; }
-        var worldCamera = _canvas != null && _canvas.renderMode != RenderMode.ScreenSpaceOverlay ? _canvas.worldCamera : null;
+        var worldCamera = _canvas != null && _canvas.renderMode != RenderMode.ScreenSpaceOverlay
+            ? _canvas.worldCamera
+            : null;
         var corners = new Vector3[4];
         _showButtonRectTransform.GetWorldCorners(corners);
         // Default to the left side of the top bar (same height as the notification button) instead
         // of stacking under it on the far right; LeftEdgeInset keeps clear of the company logo.
-        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_canvasRectTransform, corners[0], worldCamera, out var local)) {
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                _canvasRectTransform,
+                corners[0],
+                worldCamera,
+                out var local
+            )) {
             var rect = _canvasRectTransform.rect;
             _rectTransform.anchoredPosition = new Vector2(rect.xMin + LeftEdgeInset, local.y - 12f);
             Clamp();

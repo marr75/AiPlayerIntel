@@ -33,15 +33,24 @@ struct Deficit {
 sealed class DeficitService {
     // One live pass populating both targets so no consumer re-reads the ledger.
     // Live formula only (research.md §3.1) — never a raw resourceDemandPerObject read.
-    public Deficit Evaluate(CompanyBehaviour companyBehaviour, ObjectInfo where, ResourceDefinition resourceDefinition, double howMuch = 0) {
+    public Deficit Evaluate(
+        CompanyBehaviour companyBehaviour,
+        ObjectInfo where,
+        ResourceDefinition resourceDefinition,
+        double howMuch = 0
+    ) {
         var company = companyBehaviour != null ? companyBehaviour.Company : null;
         double stock = 0;
         if (where != null && resourceDefinition != null && company != null) {
             var row = where.GetObjectInfoData(company)?.FastGetResource(resourceDefinition);
             if (row != null) { stock = row.Value; }
         }
-        var demand = companyBehaviour != null && where != null && resourceDefinition != null ? companyBehaviour.GetResourceDemandOnObject(where, resourceDefinition) : 0;
-        var reservation = companyBehaviour != null && where != null && resourceDefinition != null ? companyBehaviour.GetResourceReservationOnObject(where, resourceDefinition) : 0;
+        var demand = companyBehaviour != null && where != null && resourceDefinition != null
+            ? companyBehaviour.GetResourceDemandOnObject(where, resourceDefinition)
+            : 0;
+        var reservation = companyBehaviour != null && where != null && resourceDefinition != null
+            ? companyBehaviour.GetResourceReservationOnObject(where, resourceDefinition)
+            : 0;
         var available = Math.Max(0, stock - reservation);
         var target = howMuch > 0 ? howMuch : demand;
         var inBom = IsInActiveBom(companyBehaviour, where, resourceDefinition);
@@ -61,16 +70,22 @@ sealed class DeficitService {
 
     // §3.2 discriminator: does rd match a live active-objective BOM line for c at where?
     // BOM membership SURVIVES a transient teardown → admit `UnmetVsDemand>0 OR IsInActiveBom`.
-    public bool IsInActiveBom(CompanyBehaviour? companyBehaviour, ObjectInfo? where, ResourceDefinition? resourceDefinition) {
+    public bool IsInActiveBom(
+        CompanyBehaviour? companyBehaviour,
+        ObjectInfo? where,
+        ResourceDefinition? resourceDefinition
+    ) {
         var company = companyBehaviour != null ? companyBehaviour.Company : null;
         var contractManager = MonoBehaviourSingleton<ContractManager>.Instance;
-        if (company == null || where == null || resourceDefinition == null || contractManager?.allContracts == null) { return false; }
+        if (company == null || where == null || resourceDefinition == null || contractManager?.allContracts == null) {
+            return false;
+        }
         var whereId = where.id;
         foreach (var contract in contractManager.allContracts) {
-            if (contract == null || contract.ContractStateForCompany(company) != ContractManager.EContractState.Active) { continue; }
-            if (!contract.PerCompanyContractData.TryGetValue(company, out var playerContractData) || playerContractData?.ObjectivesDataList == null) {
-                continue;
-            }
+            if (contract == null
+                || contract.ContractStateForCompany(company) != ContractManager.EContractState.Active) { continue; }
+            if (!contract.PerCompanyContractData.TryGetValue(company, out var playerContractData)
+                || playerContractData?.ObjectivesDataList == null) { continue; }
             foreach (var objectiveData in playerContractData.ObjectivesDataList) {
                 if (objectiveData == null || objectiveData.IsComplete || objectiveData.Objective == null) { continue; }
                 if (BomMatches(objectiveData.Objective, resourceDefinition, whereId)) { return true; }
@@ -116,7 +131,9 @@ sealed class DeficitService {
                 }
                 break;
             case EObjectiveType.Deliver:
-                if (objective.productItem is ResourceDefinition resourceDefinition) { yield return new BomLine(resourceDefinition, objective.howMuch); }
+                if (objective.productItem is ResourceDefinition resourceDefinition) {
+                    yield return new BomLine(resourceDefinition, objective.howMuch);
+                }
                 break;
         }
     }

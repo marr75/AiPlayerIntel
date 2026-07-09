@@ -37,12 +37,12 @@ static class CatchUpMultiplier {
                         ? Math.Sqrt(money * money + catchUp * catchUp * time * time) // scale only the time term
                         : __result * catchUp;
                     break;
-                default: // Max/Min or any future enum: time-only recollapse is ill-defined, so scale the whole magnitude
+                default
+                    : // Max/Min or any future enum: time-only recollapse is ill-defined, so scale the whole magnitude
                     __result *= catchUp;
                     break;
             }
-        } catch (Exception ex) {
-            Plugin.Log.LogError($"CatchUpMultiplier.Postfix failed: {ex}");
         }
+        catch (Exception ex) { Plugin.Log.LogError($"CatchUpMultiplier.Postfix failed: {ex}"); }
     }
 }

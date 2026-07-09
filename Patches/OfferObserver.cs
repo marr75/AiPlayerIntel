@@ -26,7 +26,8 @@ static class OfferObserver {
                 $"[MarketFill] {CompanyTakeOffer.ID} bought {count:0.##} {__instance.Rd?.name} "
                 + $"@ {__instance.WhereOffer?.ObjectName} ({needClass}, offer {__instance.ID})"
             );
-        } catch {
+        }
+        catch {
             // Swallow deliberately: telemetry must never break a fill.
         }
     }

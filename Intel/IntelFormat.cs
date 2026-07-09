@@ -27,12 +27,15 @@ static class IntelFormat {
 
     internal static string RateEta(ResourceLine line) {
         var parts = new List<string>();
-        if (line.Rate is { } rate && Math.Abs(rate) >= 0.05) { parts.Add($"{(rate >= 0 ? "+" : "")}{Magnitude(rate)}/day"); }
+        if (line.Rate is { } rate && Math.Abs(rate) >= 0.05) {
+            parts.Add($"{(rate >= 0 ? "+" : "")}{Magnitude(rate)}/day");
+        }
         if (line.EtaDays is { } eta) { parts.Add($"ETA ~{eta:0} d"); }
         return string.Join(" · ", parts);
     }
 
-    internal static string MaxBuy(ResourceLine line) => line.MaxBid is { } maxBid ? $"{Magnitude(line.PriceQty)}u @ {Money(maxBid)}/u" : "";
+    internal static string MaxBuy(ResourceLine line) =>
+        line.MaxBid is { } maxBid ? $"{Magnitude(line.PriceQty)}u @ {Money(maxBid)}/u" : "";
 
     internal static string Magnitude(double value) {
         var magnitude = Math.Abs(value);

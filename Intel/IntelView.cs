@@ -77,7 +77,13 @@ static class IntelView {
         };
     }
 
-    static RowVm CompanyHeader(CompanyIntel companyIntel, IGrouping<string, IntelRow> companyGroup, string key, bool open, int leafCount) =>
+    static RowVm CompanyHeader(
+        CompanyIntel companyIntel,
+        IGrouping<string, IntelRow> companyGroup,
+        string key,
+        bool open,
+        int leafCount
+    ) =>
         new() {
             Kind = RowKind.CompanyHeader,
             Depth = 1,
@@ -100,12 +106,7 @@ static class IntelView {
             Objective = objective,
         };
 
-    static RowVm Leaf(IntelRow row) =>
-        new() {
-            Kind = RowKind.Leaf,
-            Depth = 2,
-            Detail = row,
-        };
+    static RowVm Leaf(IntelRow row) => new() { Kind = RowKind.Leaf, Depth = 2, Detail = row };
 
     static RowVm EmptyNote(IntelSnapshot snapshot) =>
         new() {

@@ -17,7 +17,12 @@ static class IntelActions {
 
     // Opens the make-offer dialog pre-filled with a sell offer at the AI's max-buy ceiling.
     // No auto-submit: the user reviews and clicks the dialog's confirm button.
-    internal static void OpenOffer(ObjectInfo body, ResourceDefinition resourceDefinition, double maxBuyPerUnit, double needQuantity) {
+    internal static void OpenOffer(
+        ObjectInfo body,
+        ResourceDefinition resourceDefinition,
+        double maxBuyPerUnit,
+        double needQuantity
+    ) {
         var uiManager = SerializedMonoBehaviourSingleton<UIManager>.Instance;
         if (uiManager == null) { return; }
         uiManager.Open(EWindowType.MarketOfferMakeOffer, body);

@@ -8,8 +8,8 @@ namespace AiPlayerIntel.Core;
 
 // Monotone completed-contract standing index feeding both catch-up expressions; refreshed once per game day (wtp §1, design §2c).
 sealed class StandingService {
-    readonly Configuration _config;
     readonly Dictionary<string, int> _completed = new();
+    readonly Configuration _config;
     int _lastDay = int.MinValue;
     int _leader;
 
@@ -55,7 +55,10 @@ sealed class StandingService {
             if (company == null || company.IsPlayer || company.ID == null) { continue; }
             var done = 0;
             foreach (var contract in contractManager.allContracts) {
-                if (contract != null && contract.ContractStateForCompany(company) == ContractManager.EContractState.Completed) { done++; }
+                if (contract != null
+                    && contract.ContractStateForCompany(company) == ContractManager.EContractState.Completed) {
+                    done++;
+                }
             }
             _completed[company.ID] = done;
             if (done > _leader) { _leader = done; }
