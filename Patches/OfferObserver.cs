@@ -6,23 +6,28 @@ using Manager;
 
 namespace AiPlayerIntel.Patches;
 
-// Telemetry (feature F): log only COMMITTED AI fills. A SEPARATE class from the veto Prefix — it reads
-// __result AFTER the (possibly vetoed) original, so a vetoed attempt is never recorded as a fill. Observe-only;
-// never blocks or mutates a buy.
+// Telemetry (feature F): logs only COMMITTED AI fills — reads __result after the veto Prefix's original, so a
+// vetoed attempt is never recorded. Observe-only.
 [HarmonyPatch(typeof(Offer), nameof(Offer.FullFill))]
 static class OfferObserver {
     static bool Prepare() => Services.Config.MasterEnable.Value && Services.Config.ObserveLogFills.Value;
 
     static void Postfix(Offer __instance, Company CompanyTakeOffer, double count, bool __result) {
         if (!__result || CompanyTakeOffer == null) { return; }
-        var gm = MonoBehaviourSingleton<GameManager>.Instance;
-        if (gm != null && CompanyTakeOffer == gm.Player) { return; }   // silent AI buys only
+        var gameManager = MonoBehaviourSingleton<GameManager>.Instance;
+        if (gameManager != null && CompanyTakeOffer == gameManager.Player) { return; } // silent AI buys only
 
         try {
-            var cb = CompanyTakeOffer.companyBehaviour;
-            var cls = cb != null ? Services.Deficit.Evaluate(cb, __instance.WhereOffer, __instance.Rd).Class : NeedClass.NeedLess;
-            Plugin.Log.LogInfo($"[MarketFill] {CompanyTakeOffer.ID} bought {count:0.##} {__instance.Rd?.name} "
-                + $"@ {__instance.WhereOffer?.ObjectName} ({cls}, offer {__instance.ID})");
-        } catch { /* telemetry must never break a fill */ }
+            var companyBehaviour = CompanyTakeOffer.companyBehaviour;
+            var needClass = companyBehaviour != null
+                ? Services.Deficit.Evaluate(companyBehaviour, __instance.WhereOffer, __instance.Rd).Class
+                : NeedClass.NeedLess;
+            Plugin.Log.LogInfo(
+                $"[MarketFill] {CompanyTakeOffer.ID} bought {count:0.##} {__instance.Rd?.name} "
+                + $"@ {__instance.WhereOffer?.ObjectName} ({needClass}, offer {__instance.ID})"
+            );
+        } catch {
+            // Swallow deliberately: telemetry must never break a fill.
+        }
     }
 }

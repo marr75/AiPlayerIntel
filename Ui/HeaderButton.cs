@@ -12,77 +12,36 @@ namespace AiPlayerIntel.Ui;
 // Floating HUD toggle, parked next to the vanilla notification button (same pattern the
 // Power/LifeSupport/Fleet tracker mods use). onClick toggles the UGUI IntelPanel.
 sealed class HeaderButton : MonoBehaviour,
-    IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler,
-    IBeginDragHandler, IDragHandler, IEndDragHandler {
-    static readonly FieldInfo? ShowBtnField =
+    IPointerEnterHandler,
+    IPointerExitHandler,
+    IPointerDownHandler,
+    IPointerUpHandler,
+    IBeginDragHandler,
+    IDragHandler,
+    IEndDragHandler {
+    const float LeftEdgeInset = 260f;
+
+    static readonly FieldInfo? ShowButtonField =
         typeof(NotificationManager).GetField("showNotificationHistory", BindingFlags.Instance | BindingFlags.NonPublic);
+
     static readonly FieldInfo? HistoryField =
         typeof(NotificationManager).GetField("notificationHistory", BindingFlags.Instance | BindingFlags.NonPublic);
 
-    Action? _onClick;
-    Image _bg = null!;
-    Color _normal, _hover, _press;
-    RectTransform _rt = null!;
-    RectTransform? _showBtnRT;
+    Image _background = null!;
     Canvas? _canvas;
-    RectTransform? _canvasRT;
-    Vector2 _pressScreenPos;
+    RectTransform? _canvasRectTransform;
     Vector2 _dragStart;
+    Color _normal, _hover, _press;
 
-    internal static void Inject(NotificationManager nm) {
-        try {
-            if (ShowBtnField?.GetValue(nm) is not Button showBtn) {
-                Plugin.Log.LogWarning("AI Player Intel: notification button not found; header button skipped (F10 still works).");
-                return;
-            }
-            var canvas = showBtn.GetComponentInParent<Canvas>();
-            if (canvas == null) {
-                Plugin.Log.LogWarning("AI Player Intel: HUD canvas not found; header button skipped (F10 still works).");
-                return;
-            }
-            var historyGO = HistoryField?.GetValue(nm) as GameObject;
-            var font = FindFont(showBtn, historyGO);
-
-            var go = new GameObject("aiPlayerIntelHeaderButton", typeof(RectTransform));
-            go.transform.SetParent(canvas.transform, false);
-            go.transform.SetAsLastSibling();
-            go.AddComponent<LayoutElement>().ignoreLayout = true;
-
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
-            rt.pivot = new Vector2(0f, 1f);
-            rt.sizeDelta = new Vector2(150f, 30f);
-            rt.anchoredPosition = new Vector2(-9999f, -9999f);
-
-            var bg = go.AddComponent<Image>();
-            var srcImg = showBtn.GetComponent<Image>();
-            if (srcImg != null) {
-                bg.sprite = srcImg.sprite;
-                bg.type = srcImg.type;
-                bg.color = srcImg.color;
-            } else {
-                bg.color = new Color(0.15f, 0.15f, 0.2f, 0.9f);
-            }
-
-            MakeLabel(go, font);
-
-            var hb = go.AddComponent<HeaderButton>();
-            hb._bg = bg;
-            hb._normal = bg.color;
-            hb._hover = bg.color * 1.3f;
-            hb._press = bg.color * 0.7f;
-            hb._showBtnRT = showBtn.GetComponent<RectTransform>();
-            hb._onClick = IntelPanel.Toggle;
-            Plugin.Log.LogInfo("AI Player Intel header button injected.");
-        } catch (Exception e) {
-            Plugin.Log.LogWarning($"AI Player Intel: header button injection failed: {e.Message}");
-        }
-    }
+    Action? _onClick;
+    Vector2 _pressScreenPos;
+    RectTransform _rectTransform = null!;
+    RectTransform? _showButtonRectTransform;
 
     void Awake() {
-        _rt = GetComponent<RectTransform>();
+        _rectTransform = GetComponent<RectTransform>();
         _canvas = GetComponentInParent<Canvas>();
-        _canvasRT = _canvas?.GetComponent<RectTransform>();
+        _canvasRectTransform = _canvas?.GetComponent<RectTransform>();
     }
 
     IEnumerator Start() {
@@ -91,83 +50,140 @@ sealed class HeaderButton : MonoBehaviour,
         PositionNextToNotificationButton();
     }
 
-    const float LeftEdgeInset = 260f;
+    public void OnBeginDrag(PointerEventData eventData) => _dragStart = _rectTransform.anchoredPosition;
 
-    void PositionNextToNotificationButton() {
-        if (_showBtnRT == null || _canvasRT == null) { return; }
-        var cam = _canvas != null && _canvas.renderMode != RenderMode.ScreenSpaceOverlay ? _canvas.worldCamera : null;
-        var corners = new Vector3[4];
-        _showBtnRT.GetWorldCorners(corners);
-        // Default to the left side of the top bar (same height as the notification button) instead
-        // of stacking under it on the far right; LeftEdgeInset keeps clear of the company logo.
-        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_canvasRT, corners[0], cam, out var local)) {
-            var rect = _canvasRT.rect;
-            _rt.anchoredPosition = new Vector2(rect.xMin + LeftEdgeInset, local.y - 12f);
-            Clamp();
-        }
+    public void OnDrag(PointerEventData eventData) {
+        var scale = _canvas != null ? _canvas.scaleFactor : 1f;
+        _rectTransform.anchoredPosition = _dragStart + (eventData.position - _pressScreenPos) / scale;
+        Clamp();
     }
 
-    public void OnPointerEnter(PointerEventData e) { if (_bg != null) { _bg.color = _hover; } }
-    public void OnPointerExit(PointerEventData e) { if (_bg != null) { _bg.color = _normal; } }
-
-    public void OnPointerDown(PointerEventData e) {
-        _pressScreenPos = e.position;
-        if (_bg != null) { _bg.color = _press; }
+    public void OnEndDrag(PointerEventData eventData) {
+        Clamp();
+        if (_background != null) { _background.color = _normal; }
     }
 
-    public void OnPointerUp(PointerEventData e) {
-        if (_bg != null) { _bg.color = _hover; }
-        if (Vector2.Distance(e.position, _pressScreenPos) < EventSystem.current.pixelDragThreshold) {
+    public void OnPointerDown(PointerEventData eventData) {
+        _pressScreenPos = eventData.position;
+        if (_background != null) { _background.color = _press; }
+    }
+
+    public void OnPointerEnter(PointerEventData eventData) {
+        if (_background != null) { _background.color = _hover; }
+    }
+
+    public void OnPointerExit(PointerEventData eventData) {
+        if (_background != null) { _background.color = _normal; }
+    }
+
+    public void OnPointerUp(PointerEventData eventData) {
+        if (_background != null) { _background.color = _hover; }
+        if (Vector2.Distance(eventData.position, _pressScreenPos) < EventSystem.current.pixelDragThreshold) {
             _onClick?.Invoke();
         }
     }
 
-    public void OnBeginDrag(PointerEventData e) { _dragStart = _rt.anchoredPosition; }
+    internal static void Inject(NotificationManager notificationManager) {
+        try {
+            if (ShowButtonField?.GetValue(notificationManager) is not Button showButton) {
+                Plugin.Log.LogWarning(
+                    "AI Player Intel: notification button not found; header button skipped (F10 still works)."
+                );
+                return;
+            }
+            var canvas = showButton.GetComponentInParent<Canvas>();
+            if (canvas == null) {
+                Plugin.Log.LogWarning(
+                    "AI Player Intel: HUD canvas not found; header button skipped (F10 still works)."
+                );
+                return;
+            }
+            var historyGameObject = HistoryField?.GetValue(notificationManager) as GameObject;
+            var font = FindFont(showButton, historyGameObject);
 
-    public void OnDrag(PointerEventData e) {
-        var scale = _canvas != null ? _canvas.scaleFactor : 1f;
-        _rt.anchoredPosition = _dragStart + (e.position - _pressScreenPos) / scale;
-        Clamp();
+            var gameObject = new GameObject("aiPlayerIntelHeaderButton", typeof(RectTransform));
+            gameObject.transform.SetParent(canvas.transform, false);
+            gameObject.transform.SetAsLastSibling();
+            gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+
+            var rectTransform = gameObject.GetComponent<RectTransform>();
+            rectTransform.anchorMin = rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            rectTransform.pivot = new Vector2(0f, 1f);
+            rectTransform.sizeDelta = new Vector2(150f, 30f);
+            rectTransform.anchoredPosition = new Vector2(-9999f, -9999f);
+
+            var background = gameObject.AddComponent<Image>();
+            var sourceImage = showButton.GetComponent<Image>();
+            if (sourceImage != null) {
+                background.sprite = sourceImage.sprite;
+                background.type = sourceImage.type;
+                background.color = sourceImage.color;
+            } else {
+                background.color = new Color(0.15f, 0.15f, 0.2f, 0.9f);
+            }
+
+            MakeLabel(gameObject, font);
+
+            var headerButton = gameObject.AddComponent<HeaderButton>();
+            headerButton._background = background;
+            headerButton._normal = background.color;
+            headerButton._hover = background.color * 1.3f;
+            headerButton._press = background.color * 0.7f;
+            headerButton._showButtonRectTransform = showButton.GetComponent<RectTransform>();
+            headerButton._onClick = IntelPanel.Toggle;
+            Plugin.Log.LogInfo("AI Player Intel header button injected.");
+        } catch (Exception exception) {
+            Plugin.Log.LogWarning($"AI Player Intel: header button injection failed: {exception.Message}");
+        }
     }
 
-    public void OnEndDrag(PointerEventData e) {
-        Clamp();
-        if (_bg != null) { _bg.color = _normal; }
+    void PositionNextToNotificationButton() {
+        if (_showButtonRectTransform == null || _canvasRectTransform == null) { return; }
+        var worldCamera = _canvas != null && _canvas.renderMode != RenderMode.ScreenSpaceOverlay ? _canvas.worldCamera : null;
+        var corners = new Vector3[4];
+        _showButtonRectTransform.GetWorldCorners(corners);
+        // Default to the left side of the top bar (same height as the notification button) instead
+        // of stacking under it on the far right; LeftEdgeInset keeps clear of the company logo.
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_canvasRectTransform, corners[0], worldCamera, out var local)) {
+            var rect = _canvasRectTransform.rect;
+            _rectTransform.anchoredPosition = new Vector2(rect.xMin + LeftEdgeInset, local.y - 12f);
+            Clamp();
+        }
     }
 
     void Clamp() {
-        if (_canvasRT == null) { return; }
-        var rect = _canvasRT.rect;
-        var size = _rt.sizeDelta;
-        var pos = _rt.anchoredPosition;
-        pos.x = Mathf.Clamp(pos.x, rect.xMin, rect.xMax - size.x);
-        pos.y = Mathf.Clamp(pos.y, rect.yMin + size.y, rect.yMax);
-        _rt.anchoredPosition = pos;
+        if (_canvasRectTransform == null) { return; }
+        var rect = _canvasRectTransform.rect;
+        var size = _rectTransform.sizeDelta;
+        var position = _rectTransform.anchoredPosition;
+        position.x = Mathf.Clamp(position.x, rect.xMin, rect.xMax - size.x);
+        position.y = Mathf.Clamp(position.y, rect.yMin + size.y, rect.yMax);
+        _rectTransform.anchoredPosition = position;
     }
 
     static void MakeLabel(GameObject parent, TMP_FontAsset? font) {
-        var go = new GameObject("Label", typeof(RectTransform));
-        go.transform.SetParent(parent.transform, false);
-        var rt = go.GetComponent<RectTransform>();
-        rt.anchorMin = Vector2.zero;
-        rt.anchorMax = Vector2.one;
-        rt.sizeDelta = Vector2.zero;
-        var tmp = go.AddComponent<TextMeshProUGUI>();
-        if (font != null) { tmp.font = font; }
-        tmp.text = "AI PLAYER INTEL";
-        tmp.fontSize = 11f;
-        tmp.fontStyle = FontStyles.Bold;
-        tmp.alignment = TextAlignmentOptions.Center;
-        tmp.color = Color.white;
-        tmp.raycastTarget = false;
+        var gameObject = new GameObject("Label", typeof(RectTransform));
+        gameObject.transform.SetParent(parent.transform, false);
+        var rectTransform = gameObject.GetComponent<RectTransform>();
+        rectTransform.anchorMin = Vector2.zero;
+        rectTransform.anchorMax = Vector2.one;
+        rectTransform.sizeDelta = Vector2.zero;
+        var label = gameObject.AddComponent<TextMeshProUGUI>();
+        if (font != null) { label.font = font; }
+        label.text = "AI PLAYER INTEL";
+        label.fontSize = 11f;
+        label.fontStyle = FontStyles.Bold;
+        label.alignment = TextAlignmentOptions.Center;
+        label.color = Color.white;
+        label.raycastTarget = false;
     }
 
-    static TMP_FontAsset? FindFont(Button showBtn, GameObject? historyGO) {
-        var src = showBtn.GetComponentInChildren<TextMeshProUGUI>(true);
-        if (src?.font != null) { return src.font; }
-        if (historyGO != null) {
-            src = historyGO.GetComponentInChildren<TextMeshProUGUI>(true);
-            if (src?.font != null) { return src.font; }
+    static TMP_FontAsset? FindFont(Button showButton, GameObject? historyGameObject) {
+        var source = showButton.GetComponentInChildren<TextMeshProUGUI>(true);
+        if (source?.font != null) { return source.font; }
+        if (historyGameObject != null) {
+            source = historyGameObject.GetComponentInChildren<TextMeshProUGUI>(true);
+            if (source?.font != null) { return source.font; }
         }
         return TMP_Settings.defaultFontAsset;
     }

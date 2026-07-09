@@ -15,51 +15,68 @@ using ScriptableObjectScripts;
 
 namespace AiPlayerIntel.Patches;
 
-// H — Need premium (price-space). AIs pay a configurable premium for goods they NEED (contract/demand-
-// linked + in-BOM at the offer's location) over goods they don't, so a needing company outbids a non-
-// needing one and need-scouting pays. Two transpilers inject a scale into the willingness locals that
-// live inside async MoveNext state machines (invisible to a source-level postfix). Both fail open: on a
-// missed IL match the method is left byte-identical to vanilla; the helpers swallow errors to base price.
+// H — Need premium (price-space): AIs pay a configurable premium for goods they NEED, so a needing company
+// outbids a non-needing one. Two transpilers inject a scale into async-MoveNext willingness locals. Both fail open.
 static class NeedPremiumHooks {
-    // The (1+frac) factor math now lives in Core/Willingness.NeedFactor (design §8.5); the three surface
-    // helpers below unpack their state-machine context and delegate. The transpilers + IL-match logic are
-    // unchanged — only these bodies shrank.
-
     // Accept ceiling: scale companyCost2 (the buy-side ceiling) for a needed offer.
     public static CompanyCost PremiumAccept(CompanyCost cost, IsOfferViable task) {
         try {
-            var cb = task.CompanyBehaviour;
+            var companyBehaviour = task.CompanyBehaviour;
             var where = task.where.Value?.Object;
-            var rd = task.what.Value as ResourceDefinition;
-            return cost * Services.Willingness.NeedFactor(cb, where, rd, task.howMuch.Value, Services.Config.NeedPremiumApplyToAccepts.Value);
+            var resourceDefinition = task.what.Value as ResourceDefinition;
+            return cost
+                * Services.Willingness.NeedFactor(
+                    companyBehaviour,
+                    where,
+                    resourceDefinition,
+                    task.howMuch.Value,
+                    Services.Config.NeedPremiumApplyToAccepts.Value
+                );
         } catch (Exception ex) {
             Plugin.Log.LogError($"NeedPremium.PremiumAccept failed: {ex}");
             return cost;
         }
     }
 
-    // Posted bid: scale the num term (cost * makeOfferUnitCostMultiplier) before the ceil(max(...)) at :56.
-    // deliveryCost.Money stays the untouched hard floor.
-    public static double PremiumBid(double num, MakeOfferPriorityGate gate) {
+    // Posted bid: scale the price term before the ceil(max(...)) at :56; the deliveryCost.Money hard floor stays untouched.
+    public static double PremiumBid(double price, MakeOfferPriorityGate gate) {
         try {
-            var cb = gate.CompanyBehaviour;
+            var companyBehaviour = gate.CompanyBehaviour;
             var where = gate.where.Value?.Object;
-            var rd = gate.what.Value as ResourceDefinition;
-            return num * Services.Willingness.NeedFactor(cb, where, rd, gate.howMuch.Value, Services.Config.NeedPremiumApplyToPostedBids.Value);
+            var resourceDefinition = gate.what.Value as ResourceDefinition;
+            return price
+                * Services.Willingness.NeedFactor(
+                    companyBehaviour,
+                    where,
+                    resourceDefinition,
+                    gate.howMuch.Value,
+                    Services.Config.NeedPremiumApplyToPostedBids.Value
+                );
         } catch (Exception ex) {
             Plugin.Log.LogError($"NeedPremium.PremiumBid failed: {ex}");
-            return num;
+            return price;
         }
     }
 
-    // Proactive obtain: scale the willingness Magnitude of the buy-from-offers ceiling for a needed good,
-    // before it is divided by count and ceil'd into maxPricePerUnit. Distinct method + market action from
-    // the accept path (this one FullFills offers directly, never through IsOfferViable) → no double-apply.
-    public static double PremiumObtain(double magnitude, CompanyBehaviour cb, ObjectInfo where, MyIDScriptableObject what, SharedFloat howMuch) {
+    // Proactive obtain: scale the buy-from-offers ceiling. Distinct action from accept (never via IsOfferViable) → no double-apply.
+    public static double PremiumObtain(
+        double magnitude,
+        CompanyBehaviour companyBehaviour,
+        ObjectInfo where,
+        MyIDScriptableObject what,
+        SharedFloat howMuch
+    ) {
         try {
-            var rd = what as ResourceDefinition;
-            double qty = howMuch != null ? howMuch.Value : 0.0;
-            return magnitude * Services.Willingness.NeedFactor(cb, where, rd, qty, Services.Config.NeedPremiumApplyToProactiveObtain.Value);
+            var resourceDefinition = what as ResourceDefinition;
+            var quantity = howMuch != null ? howMuch.Value : 0.0;
+            return magnitude
+                * Services.Willingness.NeedFactor(
+                    companyBehaviour,
+                    where,
+                    resourceDefinition,
+                    quantity,
+                    Services.Config.NeedPremiumApplyToProactiveObtain.Value
+                );
         } catch (Exception ex) {
             Plugin.Log.LogError($"NeedPremium.PremiumObtain failed: {ex}");
             return magnitude;
@@ -67,23 +84,32 @@ static class NeedPremiumHooks {
     }
 
     internal static MethodBase MoveNextOf(Type declaring, string asyncMethod) {
-        var m = AccessTools.Method(declaring, asyncMethod);
-        var sm = m?.GetCustomAttribute<AsyncStateMachineAttribute>()?.StateMachineType;
-        return sm != null ? AccessTools.Method(sm, nameof(IAsyncStateMachine.MoveNext)) : null!;
+        var method = AccessTools.Method(declaring, asyncMethod);
+        var stateMachineType = method?.GetCustomAttribute<AsyncStateMachineAttribute>()?.StateMachineType;
+        return stateMachineType != null ? AccessTools.Method(stateMachineType, nameof(IAsyncStateMachine.MoveNext)) : null!;
     }
 }
 
-// H-accepts — IsOfferViable.TaskFunction. Match the buyer-branch store
-// `companyCost2 = companyCost1 * takeOfferBuyUnitCostMultiplier` (ldfld takeOfferBuyUnitCostMultiplier +
-// op_Multiply(CompanyCost,CompanyCost)) and inject PremiumAccept between the multiply and the store.
+// H-accepts — IsOfferViable.TaskFunction. Match the buyer-branch store companyCost2 = companyCost1 *
+// takeOfferBuyUnitCostMultiplier (ldfld takeOfferBuyUnitCostMultiplier + op_Multiply(CompanyCost,CompanyCost))
+// and inject PremiumAccept between the multiply and the store.
 [HarmonyPatch]
 static class NeedPremiumAccept {
-    static readonly FieldInfo BuyMult = AccessTools.Field(
-        typeof(CompanyDefinition.CompanyAIConfig), nameof(CompanyDefinition.CompanyAIConfig.takeOfferBuyUnitCostMultiplier));
-    static readonly MethodInfo OpMul = AccessTools.Method(
-        typeof(CompanyCost), "op_Multiply", new[] { typeof(CompanyCost), typeof(CompanyCost) });
+    static readonly FieldInfo buyMultiplierField = AccessTools.Field(
+        typeof(CompanyDefinition.CompanyAIConfig),
+        nameof(CompanyDefinition.CompanyAIConfig.takeOfferBuyUnitCostMultiplier)
+    );
+
+    static readonly MethodInfo multiplyOperator = AccessTools.Method(
+        typeof(CompanyCost),
+        "op_Multiply",
+        new[] { typeof(CompanyCost), typeof(CompanyCost) }
+    );
+
     static readonly MethodInfo Helper = AccessTools.Method(
-        typeof(NeedPremiumHooks), nameof(NeedPremiumHooks.PremiumAccept));
+        typeof(NeedPremiumHooks),
+        nameof(NeedPremiumHooks.PremiumAccept)
+    );
 
     static bool Prepare() => Services.Config.MasterEnable.Value && Services.Config.NeedPremiumEnable.Value;
 
@@ -94,10 +120,13 @@ static class NeedPremiumAccept {
         var self = AccessTools.Field(original.DeclaringType, "<>4__this");
         var swapped = 0;
         var armed = false;
-        foreach (var ins in instructions) {
-            yield return ins;
-            if (ins.LoadsField(BuyMult)) { armed = true; continue; }
-            if (armed && ins.Calls(OpMul)) {
+        foreach (var instruction in instructions) {
+            yield return instruction;
+            if (instruction.LoadsField(buyMultiplierField)) {
+                armed = true;
+                continue;
+            }
+            if (armed && instruction.Calls(multiplyOperator)) {
                 yield return new CodeInstruction(OpCodes.Ldarg_0);
                 yield return new CodeInstruction(OpCodes.Ldfld, self);
                 yield return new CodeInstruction(OpCodes.Call, Helper);
@@ -108,20 +137,26 @@ static class NeedPremiumAccept {
         if (swapped != 1) {
             Plugin.Log.LogWarning(
                 $"NeedPremiumAccept: expected exactly 1 takeOfferBuyUnitCostMultiplier multiply, injected {swapped}. "
-                + "Accept-side need premium inactive; vanilla behavior preserved.");
+                + "Accept-side need premium inactive; vanilla behavior preserved."
+            );
         }
     }
 }
 
-// H-bids — MakeOfferPriorityGate.InternalGetCost. Match `num = costThreshold.Magnitude *
-// (double)makeOfferUnitCostMultiplier` (ldfld makeOfferUnitCostMultiplier + mul) and inject PremiumBid
-// between the multiply and the store, so the posted pricePerUnit rises but the delivery-cost floor doesn't.
+// H-bids — MakeOfferPriorityGate.InternalGetCost. Match num = costThreshold.Magnitude *
+// (double)makeOfferUnitCostMultiplier (ldfld makeOfferUnitCostMultiplier + mul) and inject PremiumBid between
+// the multiply and the store, so the posted pricePerUnit rises but the delivery-cost floor doesn't.
 [HarmonyPatch]
 static class NeedPremiumBid {
-    static readonly FieldInfo MakeMult = AccessTools.Field(
-        typeof(CompanyDefinition.CompanyAIConfig), nameof(CompanyDefinition.CompanyAIConfig.makeOfferUnitCostMultiplier));
+    static readonly FieldInfo makeOfferMultiplierField = AccessTools.Field(
+        typeof(CompanyDefinition.CompanyAIConfig),
+        nameof(CompanyDefinition.CompanyAIConfig.makeOfferUnitCostMultiplier)
+    );
+
     static readonly MethodInfo Helper = AccessTools.Method(
-        typeof(NeedPremiumHooks), nameof(NeedPremiumHooks.PremiumBid));
+        typeof(NeedPremiumHooks),
+        nameof(NeedPremiumHooks.PremiumBid)
+    );
 
     static bool Prepare() => Services.Config.MasterEnable.Value && Services.Config.NeedPremiumEnable.Value;
 
@@ -132,10 +167,13 @@ static class NeedPremiumBid {
         var self = AccessTools.Field(original.DeclaringType, "<>4__this");
         var swapped = 0;
         var armed = false;
-        foreach (var ins in instructions) {
-            yield return ins;
-            if (ins.LoadsField(MakeMult)) { armed = true; continue; }
-            if (armed && ins.opcode == OpCodes.Mul) {
+        foreach (var instruction in instructions) {
+            yield return instruction;
+            if (instruction.LoadsField(makeOfferMultiplierField)) {
+                armed = true;
+                continue;
+            }
+            if (armed && instruction.opcode == OpCodes.Mul) {
                 yield return new CodeInstruction(OpCodes.Ldarg_0);
                 yield return new CodeInstruction(OpCodes.Ldfld, self);
                 yield return new CodeInstruction(OpCodes.Call, Helper);
@@ -146,22 +184,32 @@ static class NeedPremiumBid {
         if (swapped != 1) {
             Plugin.Log.LogWarning(
                 $"NeedPremiumBid: expected exactly 1 makeOfferUnitCostMultiplier multiply, injected {swapped}. "
-                + "Bid-side need premium inactive; vanilla behavior preserved.");
+                + "Bid-side need premium inactive; vanilla behavior preserved."
+            );
         }
     }
 }
 
-// H-obtain — BuyFromOffersPriorityGate.Calc (the proactive demand-tied buy-from-offers path, :91). Match
-// `(costThreshold * makeOfferUnitCostMultiplier).Magnitude` (ldfld makeOfferUnitCostMultiplier + op_Multiply
-// + get_Magnitude) and inject PremiumObtain on the Magnitude, before the /count and ceil into maxPricePerUnit.
+// H-obtain — BuyFromOffersPriorityGate.Calc (proactive demand-tied buy-from-offers path, :91). Match
+// (costThreshold * makeOfferUnitCostMultiplier).Magnitude (ldfld makeOfferUnitCostMultiplier + op_Multiply +
+// get_Magnitude) and inject PremiumObtain on the Magnitude, before the /count and ceil into maxPricePerUnit.
 // Static method → no <>4__this; the hoisted cb/where/what/howMuch fields carry the context.
 [HarmonyPatch]
 static class NeedPremiumObtain {
-    static readonly FieldInfo MakeMult = AccessTools.Field(
-        typeof(CompanyDefinition.CompanyAIConfig), nameof(CompanyDefinition.CompanyAIConfig.makeOfferUnitCostMultiplier));
-    static readonly MethodInfo Magnitude = AccessTools.PropertyGetter(typeof(CompanyCost), nameof(CompanyCost.Magnitude));
+    static readonly FieldInfo makeOfferMultiplierField = AccessTools.Field(
+        typeof(CompanyDefinition.CompanyAIConfig),
+        nameof(CompanyDefinition.CompanyAIConfig.makeOfferUnitCostMultiplier)
+    );
+
+    static readonly MethodInfo Magnitude = AccessTools.PropertyGetter(
+        typeof(CompanyCost),
+        nameof(CompanyCost.Magnitude)
+    );
+
     static readonly MethodInfo Helper = AccessTools.Method(
-        typeof(NeedPremiumHooks), nameof(NeedPremiumHooks.PremiumObtain));
+        typeof(NeedPremiumHooks),
+        nameof(NeedPremiumHooks.PremiumObtain)
+    );
 
     static bool Prepare() => Services.Config.MasterEnable.Value && Services.Config.NeedPremiumEnable.Value;
 
@@ -169,18 +217,21 @@ static class NeedPremiumObtain {
 
     [HarmonyTranspiler]
     static IEnumerable<CodeInstruction> Transpile(IEnumerable<CodeInstruction> instructions, MethodBase original) {
-        var cb = AccessTools.Field(original.DeclaringType, "cb");
+        var companyBehaviour = AccessTools.Field(original.DeclaringType, "cb");
         var where = AccessTools.Field(original.DeclaringType, "where");
         var what = AccessTools.Field(original.DeclaringType, "what");
         var howMuch = AccessTools.Field(original.DeclaringType, "howMuch");
         var swapped = 0;
         var armed = false;
-        foreach (var ins in instructions) {
-            yield return ins;
-            if (ins.LoadsField(MakeMult)) { armed = true; continue; }
-            if (armed && ins.Calls(Magnitude)) {
+        foreach (var instruction in instructions) {
+            yield return instruction;
+            if (instruction.LoadsField(makeOfferMultiplierField)) {
+                armed = true;
+                continue;
+            }
+            if (armed && instruction.Calls(Magnitude)) {
                 yield return new CodeInstruction(OpCodes.Ldarg_0);
-                yield return new CodeInstruction(OpCodes.Ldfld, cb);
+                yield return new CodeInstruction(OpCodes.Ldfld, companyBehaviour);
                 yield return new CodeInstruction(OpCodes.Ldarg_0);
                 yield return new CodeInstruction(OpCodes.Ldfld, where);
                 yield return new CodeInstruction(OpCodes.Ldarg_0);
@@ -195,7 +246,8 @@ static class NeedPremiumObtain {
         if (swapped != 1) {
             Plugin.Log.LogWarning(
                 $"NeedPremiumObtain: expected exactly 1 makeOfferUnitCostMultiplier magnitude, injected {swapped}. "
-                + "Proactive-obtain need premium inactive; vanilla behavior preserved.");
+                + "Proactive-obtain need premium inactive; vanilla behavior preserved."
+            );
         }
     }
 }

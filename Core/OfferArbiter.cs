@@ -17,36 +17,20 @@ namespace AiPlayerIntel.Core;
 // MarketBuySequence sub-orders within a cohort. FAILS OPEN everywhere: any missing state, null, or exception
 // falls back to vanilla (allow the buy). Leases/window bound every defer so the market never stalls.
 sealed class OfferArbiter {
-    sealed class Candidate {
-        public Company C = null!;
-        public int Tier;
-        public double SortKey;
-        public double ClaimCap;
-    }
-
-    sealed class Record {
-        public List<Candidate> Ranked = new();
-        public Company? GrantedTo;
-        public DateTime LeaseUntil;
-        public DateTime WindowUntil;
-        public double CountLeftAtGrant;
-        public readonly HashSet<Company> Declined = new();
-    }
-
-    readonly Configuration _cfg;
+    readonly Configuration _config;
     readonly DeficitService _deficit;
+    readonly Dictionary<int, Record> _records = new();
     readonly StandingService _standing;
     readonly Willingness _willingness;
-    readonly Dictionary<int, Record> _records = new();
 
-    public OfferArbiter(Configuration cfg, DeficitService deficit, StandingService standing, Willingness willingness) {
-        _cfg = cfg;
+    public OfferArbiter(Configuration config, DeficitService deficit, StandingService standing, Willingness willingness) {
+        _config = config;
         _deficit = deficit;
         _standing = standing;
         _willingness = willingness;
     }
 
-    bool Active => _cfg != null && _cfg.MasterEnable.Value;
+    bool Active => _config != null && _config.MasterEnable.Value;
 
     // MarketOfferManager.AddOffer Postfix — build the record for a freshly posted player SELL offer.
     // Early-out on save-load replay (AddOffer skips the OnNewOffer fan-out then; rebuild lazily at the gate).
@@ -61,34 +45,36 @@ sealed class OfferArbiter {
     }
 
     // LockOffer.OnUpdate acquire Prefix — true = defer (park at Running), false = let vanilla acquire run.
-    public bool ShouldDefer(Offer offer, Company? c) {
+    public bool ShouldDefer(Offer offer, Company? company) {
         try {
-            if (!Active || offer == null || c == null || c.IsPlayer || !IsTracked(offer)) { return false; }
+            if (!Active || offer == null || company == null || company.IsPlayer || !IsTracked(offer)) { return false; }
             var now = Now();
             if (now == DateTime.MinValue) { return false; }
-            if (!_records.TryGetValue(offer.ID, out var r)) {
-                r = BuildRecord(offer);
-                _records[offer.ID] = r;
+            if (!_records.TryGetValue(offer.ID, out var record)) {
+                record = BuildRecord(offer);
+                _records[offer.ID] = record;
             }
-            if (offer.CountLeft <= 0.0 || now >= r.WindowUntil) { return false; }   // window closed → vanilla
+            if (offer.CountLeft <= 0.0 || now >= record.WindowUntil) { return false; } // window closed → vanilla
 
-            if (r.GrantedTo != null) {
-                if (now < r.LeaseUntil) { return r.GrantedTo != c; }   // live grant: defer everyone but grantee
-                if (offer.CountLeft < r.CountLeftAtGrant) {            // grantee bought → re-rank on fresh CountLeft
-                    r.GrantedTo = null;
-                    r.Ranked = Rank(offer);
-                } else {                                              // grantee declined → skip it next
-                    r.Declined.Add(r.GrantedTo);
-                    r.GrantedTo = null;
+            if (record.GrantedTo != null) {
+                if (now < record.LeaseUntil) { return record.GrantedTo != company; } // live grant: defer everyone but grantee
+                if (offer.CountLeft < record.CountLeftAtGrant) {
+                    // grantee bought → re-rank on fresh CountLeft
+                    record.GrantedTo = null;
+                    record.Ranked = Rank(offer);
+                } else {
+                    // grantee declined → skip it next
+                    record.Declined.Add(record.GrantedTo);
+                    record.GrantedTo = null;
                 }
             }
 
-            var best = r.Ranked.FirstOrDefault(x => !r.Declined.Contains(x.C));
-            if (best == null) { return false; }                       // nobody ranked → vanilla
-            if (best.C != c) { return true; }                         // not this company's turn → defer
-            r.GrantedTo = c;                                          // grant
-            r.LeaseUntil = now.AddDays(Math.Max(0.5, _cfg.GrantLeaseDays.Value));
-            r.CountLeftAtGrant = offer.CountLeft;
+            var best = record.Ranked.FirstOrDefault(candidate => !record.Declined.Contains(candidate.C));
+            if (best == null) { return false; } // nobody ranked → vanilla
+            if (best.C != company) { return true; } // not this company's turn → defer
+            record.GrantedTo = company; // grant
+            record.LeaseUntil = now.AddDays(Math.Max(0.5, _config.GrantLeaseDays.Value));
+            record.CountLeftAtGrant = offer.CountLeft;
             return false;
         } catch (Exception e) {
             Plugin.Log.LogWarning($"OfferArbiter.ShouldDefer failed (fail-open): {e.Message}");
@@ -100,9 +86,9 @@ sealed class OfferArbiter {
     public bool VetoCommit(Offer offer, Company? buyer) {
         try {
             if (!Active || offer == null || buyer == null || buyer.IsPlayer) { return false; }
-            if (!_records.TryGetValue(offer.ID, out var r) || r.GrantedTo == null) { return false; }
-            if (Now() >= r.LeaseUntil) { return false; }              // stale grant → allow
-            return r.GrantedTo != buyer;
+            if (!_records.TryGetValue(offer.ID, out var record) || record.GrantedTo == null) { return false; }
+            if (Now() >= record.LeaseUntil) { return false; } // stale grant → allow
+            return record.GrantedTo != buyer;
         } catch (Exception e) {
             Plugin.Log.LogWarning($"OfferArbiter.VetoCommit failed (fail-open): {e.Message}");
             return false;
@@ -110,63 +96,87 @@ sealed class OfferArbiter {
     }
 
     static bool IsTracked(Offer offer) {
-        var gm = MonoBehaviourSingleton<GameManager>.Instance;
-        return offer != null && !offer.BuySell && gm != null && offer.Company == gm.Player;
+        var gameManager = MonoBehaviourSingleton<GameManager>.Instance;
+        return offer != null && !offer.BuySell && gameManager != null && offer.Company == gameManager.Player;
     }
 
     static DateTime Now() {
-        var tc = MonoBehaviourSingleton<TimeController>.Instance;
-        return tc != null ? tc.CurrentTime : DateTime.MinValue;
+        var timeController = MonoBehaviourSingleton<TimeController>.Instance;
+        return timeController != null ? timeController.CurrentTime : DateTime.MinValue;
     }
 
-    Record BuildRecord(Offer offer) => new() {
-        Ranked = Rank(offer),
-        WindowUntil = Now().AddDays(Math.Max(1.0, _cfg.PriorityWindowDays.Value)),
-    };
+    Record BuildRecord(Offer offer) =>
+        new() {
+            Ranked = Rank(offer),
+            WindowUntil = Now().AddDays(Math.Max(1.0, _config.PriorityWindowDays.Value)),
+        };
 
     // Two passes: MarketBuyOrder cohort (Tier), then MarketBuySequence sub-order within cohort.
     List<Candidate> Rank(Offer offer) {
-        var order = _cfg.MarketBuyOrder.Value;
-        var seq = _cfg.MarketBuySequence.Value;
+        var order = _config.MarketBuyOrder.Value;
+        var sequence = _config.MarketBuySequence.Value;
         var where = offer.WhereOffer;
-        var rd = offer.Rd;
-        var gm = MonoBehaviourSingleton<GameManager>.Instance;
+        var resourceDefinition = offer.Rd;
+        var gameManager = MonoBehaviourSingleton<GameManager>.Instance;
         var list = new List<Candidate>();
-        if (where == null || rd == null || gm?.Companies == null) { return list; }
+        if (where == null || resourceDefinition == null || gameManager?.Companies == null) { return list; }
 
-        foreach (var company in gm.Companies) {
+        foreach (var company in gameManager.Companies) {
             if (company == null || company == offer.Company) { continue; }
-            var cb = company.companyBehaviour;
-            if (cb == null || !cb.aiEnabled) { continue; }
-            if (!cb.AIConfig.takeOffersFromOtherAIs && offer.Company != gm.Player) { continue; }
+            var companyBehaviour = company.companyBehaviour;
+            if (companyBehaviour == null || !companyBehaviour.aiEnabled) { continue; }
+            if (!companyBehaviour.AIConfig.takeOffersFromOtherAIs && offer.Company != gameManager.Player) { continue; }
 
-            var d = _deficit.Evaluate(cb, where, rd);
-            bool tier1 = d.UnmetVsDemand > 0.0 || d.InBom;            // contract-linked/transient deficit cohort
-            if (order == Config.MarketBuyOrder.ContractOnly && !tier1) { continue; }   // opportunists dropped
-            int tier = order == Config.MarketBuyOrder.Vanilla ? 1 : (tier1 ? 1 : 2);
-            double cap = tier1 ? Math.Min(offer.CountLeft, d.UnmetVsNeed) : offer.CountLeft;
+            var deficit = _deficit.Evaluate(companyBehaviour, where, resourceDefinition);
+            var tier1 = deficit.UnmetVsDemand > 0.0 || deficit.InBom; // contract-linked/transient deficit cohort
+            if (order == MarketBuyOrder.ContractOnly && !tier1) { continue; } // opportunists dropped
+            var tier = order == MarketBuyOrder.Vanilla ? 1 : tier1 ? 1 : 2;
+            var claimCap = tier1 ? Math.Min(offer.CountLeft, deficit.UnmetVsNeed) : offer.CountLeft;
 
-            list.Add(new Candidate {
-                C = company,
-                Tier = tier,
-                ClaimCap = cap,
-                SortKey = SortKey(seq, cb, where, rd, d, cap),
-            });
+            list.Add(
+                new Candidate {
+                    C = company,
+                    Tier = tier,
+                    ClaimCap = claimCap,
+                    SortKey = SortKey(sequence, companyBehaviour, where, resourceDefinition, deficit, claimCap),
+                }
+            );
         }
-        return list.OrderBy(x => x.Tier).ThenBy(x => x.SortKey).ToList();
+        return list.OrderBy(candidate => candidate.Tier).ThenBy(candidate => candidate.SortKey).ToList();
     }
 
     // Ascending SortKey = correct within-cohort order for the chosen sub-order.
-    double SortKey(MarketBuySequence seq, CompanyBehaviour cb, ObjectInfo where, ResourceDefinition rd, Deficit d, double cap) {
-        switch (seq) {
-            case Config.MarketBuySequence.FarthestBehind:
-                return -_standing.Trailing(cb.Company);              // largest standing gap first
-            case Config.MarketBuySequence.PriceAscending:
-                return _cfg.PremiumOrdering.Value ? _willingness.WhatWillPay(cb, where, rd, cap) : -d.UnmetVsDemand;
-            case Config.MarketBuySequence.PriceDescending:
-                return _cfg.PremiumOrdering.Value ? -_willingness.WhatWillPay(cb, where, rd, cap) : -d.UnmetVsDemand;
-            default:
-                return 0.0;
+    double SortKey(
+        MarketBuySequence sequence,
+        CompanyBehaviour companyBehaviour,
+        ObjectInfo where,
+        ResourceDefinition resourceDefinition,
+        Deficit deficit,
+        double claimCap
+    ) {
+        switch (sequence) {
+            case MarketBuySequence.FarthestBehind: return -_standing.Trailing(companyBehaviour.Company); // largest standing gap first
+            case MarketBuySequence.PriceAscending:
+                return _config.PremiumOrdering.Value ? _willingness.WhatWillPay(companyBehaviour, where, resourceDefinition, claimCap) : -deficit.UnmetVsDemand;
+            case MarketBuySequence.PriceDescending:
+                return _config.PremiumOrdering.Value ? -_willingness.WhatWillPay(companyBehaviour, where, resourceDefinition, claimCap) : -deficit.UnmetVsDemand;
+            default: return 0.0;
         }
+    }
+
+    sealed class Candidate {
+        public Company C = null!;
+        public double ClaimCap;
+        public double SortKey;
+        public int Tier;
+    }
+
+    sealed class Record {
+        public readonly HashSet<Company> Declined = new();
+        public double CountLeftAtGrant;
+        public Company? GrantedTo;
+        public DateTime LeaseUntil;
+        public List<Candidate> Ranked = new();
+        public DateTime WindowUntil;
     }
 }

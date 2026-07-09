@@ -25,7 +25,7 @@ static class LockOfferGatePatch {
     static bool Prepare() => Services.Config.MasterEnable.Value;
 
     static bool Prefix(LockOffer __instance, ref TaskStatus __result) {
-        if (!__instance.@lock) { return true; }                 // release path — never gate
+        if (!__instance.@lock) { return true; } // release path — never gate
         var offer = __instance.offer.Value?.Object;
         if (offer == null) { return true; }
         if (Services.Arbiter.ShouldDefer(offer, __instance.Company)) {

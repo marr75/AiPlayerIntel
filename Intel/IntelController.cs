@@ -11,62 +11,63 @@ namespace AiPlayerIntel.Intel;
 // view state, and the toggle-key poll. Self-drives in Update so refresh runs on cadence even
 // while the panel is hidden; the view only reads Current.
 sealed class IntelController : MonoBehaviour {
-    static IntelController? _instance;
-    internal static IntelController? Instance => _instance;
-
-    float _accum;
-    bool _refreshInFlight;
-    bool _diyActive = true;
-    volatile IntelSnapshot _current = new();
-
     internal readonly ViewState State = new();
-    internal IntelSnapshot Current => _current;
-    internal bool InFlight => _refreshInFlight;
-    internal event Action? Changed;
 
-    internal static void Ensure() {
-        if (_instance != null) { return; }
-        var go = new GameObject(nameof(IntelController)) { hideFlags = HideFlags.HideAndDontSave };
-        DontDestroyOnLoad(go);
-        _instance = go.AddComponent<IntelController>();
-        Plugin.Log.LogInfo("AI Player Intel controller created.");
-    }
+    float _accumulatedSeconds;
+    volatile IntelSnapshot _current = new();
+    bool _diyActive = true;
+    internal static IntelController? Instance { get; private set; }
+
+    internal IntelSnapshot Current => _current;
+    internal bool InFlight { get; private set; }
 
     void Update() {
         if (Input.GetKeyDown(Services.Config.ToggleKey.Value)) { IntelPanel.Toggle(); }
-        _accum += Time.deltaTime;
-        if (_accum >= Mathf.Clamp(Services.Config.RefreshSeconds.Value, 1f, 30f) && !_refreshInFlight) {
-            _accum = 0f;
+        _accumulatedSeconds += Time.deltaTime;
+        if (_accumulatedSeconds >= Mathf.Clamp(Services.Config.RefreshSeconds.Value, 1f, 30f) && !InFlight) {
+            _accumulatedSeconds = 0f;
             Refresh().Forget();
         }
     }
 
+    internal event Action? Changed;
+
+    internal static void Ensure() {
+        if (Instance != null) { return; }
+        var gameObject = new GameObject(nameof(IntelController)) { hideFlags = HideFlags.HideAndDontSave };
+        DontDestroyOnLoad(gameObject);
+        Instance = gameObject.AddComponent<IntelController>();
+        Plugin.Log.LogInfo("AI Player Intel controller created.");
+    }
+
     internal void ForceRefresh() {
-        if (_refreshInFlight) { return; }
-        _accum = 0f;
+        if (InFlight) { return; }
+        _accumulatedSeconds = 0f;
         Refresh().Forget();
     }
 
     async UniTaskVoid Refresh() {
-        _refreshInFlight = true;
+        InFlight = true;
         try {
             UpdateDiyGate();
             _current = await Collectors.Build(_diyActive);
             Changed?.Invoke();
-        } catch (Exception e) {
-            Plugin.Log.LogWarning($"AI Player Intel refresh failed: {e.Message}");
+        } catch (Exception exception) {
+            Plugin.Log.LogWarning($"AI Player Intel refresh failed: {exception.Message}");
         } finally {
-            _refreshInFlight = false;
+            InFlight = false;
         }
     }
 
     void UpdateDiyGate() {
-        var gm = MonoBehaviourSingleton<GameManager>.Instance;
-        bool blocked = gm != null && gm.blockCheckCanPLanMissionForNotPlayer;
-        bool active = !blocked;
+        var gameManager = MonoBehaviourSingleton<GameManager>.Instance;
+        var blocked = gameManager != null && gameManager.blockCheckCanPLanMissionForNotPlayer;
+        var active = !blocked;
         if (active != _diyActive) {
-            Plugin.Log.LogInfo($"AI Player Intel: DIY valuation {(active ? "enabled" : "disabled")} "
-                + $"(blocked={blocked}).");
+            Plugin.Log.LogInfo(
+                $"AI Player Intel: DIY valuation {(active ? "enabled" : "disabled")} "
+                + $"(blocked={blocked})."
+            );
         }
         _diyActive = active;
     }

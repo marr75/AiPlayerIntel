@@ -7,59 +7,53 @@ using ScriptableObjectScripts;
 
 namespace AiPlayerIntel.Core;
 
-// The one home for every price factor (design §8.5). Owns the need-premium (1+frac) math (moved out of
-// NeedPremium.cs) and delegates catch-up to StandingService. Injected deps; the static patch boundary
-// reads it through the Services holder. Returns dimensionless multipliers over the game's base DIY cost —
-// never a from-scratch price (the base already encodes transit+distance+the Money/Time fold, wtp/transit).
+// Owns every price factor as a dimensionless multiplier over base DIY cost, never a from-scratch price (design §8.5).
 sealed class Willingness {
-    // Live clamp on the effective need fraction; keeps the composed ceiling market-sane even with a
-    // hand-set Fraction (design §5.4). Derived: assumedMaxCatchUp(2.0)*buyMult(0.9)*(1+f) <= 3.
-    const double MaxFraction = 3.0 / (2.0 * 0.9) - 1.0;   // ~0.667
+    // Clamp so assumedMaxCatchUp(2.0) * buyMult(0.9) * (1+f) <= 3 (design §5.4).
+    const double MaxFraction = 3.0 / (2.0 * 0.9) - 1.0; // ~0.667
 
-    readonly Configuration _cfg;
+    readonly Configuration _config;
     readonly DeficitService _deficit;
     readonly StandingService _standing;
 
-    public Willingness(Configuration cfg, DeficitService deficit, StandingService standing) {
-        _cfg = cfg;
+    public Willingness(Configuration config, DeficitService deficit, StandingService standing) {
+        _config = config;
         _deficit = deficit;
         _standing = standing;
     }
 
-    // (1 + needPremium) for a needed (contract-linked, deficit-capped) good, else 1.0. Catch-up rides the
-    // DIY basis upstream (CalcCostMagnitude), so the two factors compose multiplicatively by call site.
-    public double NeedFactor(CompanyBehaviour? cb, ObjectInfo? where, ResourceDefinition? rd, double howMuch, bool surfaceOn) {
-        if (_cfg == null || !_cfg.MasterEnable.Value || !_cfg.NeedPremiumEnable.Value || !surfaceOn) { return 1.0; }
-        if (cb == null || where == null || rd == null) { return 1.0; }
+    // (1 + needPremium) for a needed good, else 1.0; composes multiplicatively with catch-up at each call site.
+    public double NeedFactor(
+        CompanyBehaviour? companyBehaviour,
+        ObjectInfo? where,
+        ResourceDefinition? resourceDefinition,
+        double howMuch,
+        bool surfaceOn
+    ) {
+        if (_config == null || !_config.MasterEnable.Value || !_config.NeedPremiumEnable.Value || !surfaceOn) { return 1.0; }
+        if (companyBehaviour == null || where == null || resourceDefinition == null) { return 1.0; }
 
-        var d = _deficit.Evaluate(cb, where, rd);
-        if (d.Class != NeedClass.ContractLinked) { return 1.0; }   // non-needed → no premium
+        var deficit = _deficit.Evaluate(companyBehaviour, where, resourceDefinition);
+        if (deficit.Class != NeedClass.ContractLinked) { return 1.0; } // non-needed → no premium
 
-        double frac = Math.Min(_cfg.NeedPremiumFraction.Value, MaxFraction);
-        if (frac <= 0.0) { return 1.0; }
-        if (_cfg.NeedPremiumCapToDeficit.Value && howMuch > 0.0) {
-            double premiumQty = Math.Min(howMuch, d.UnmetVsNeed);
-            if (premiumQty <= 0.0) { return 1.0; }
-            frac *= premiumQty / howMuch;
+        var fraction = Math.Min(_config.NeedPremiumFraction.Value, MaxFraction);
+        if (fraction <= 0.0) { return 1.0; }
+        if (_config.NeedPremiumCapToDeficit.Value && howMuch > 0.0) {
+            var premiumQuantity = Math.Min(howMuch, deficit.UnmetVsNeed);
+            if (premiumQuantity <= 0.0) { return 1.0; }
+            fraction *= premiumQuantity / howMuch;
         }
-        return 1.0 + frac;
+        return 1.0 + fraction;
     }
 
-    // Price-space catch-up (design §8.4): the cost-of-time multiplier for a trailing company; leader → 1.0.
-    public double CostOfTimeFactor(Company c) => _standing.CatchUpFactor(c);
+    // Cost-of-time multiplier for a trailing company; leader → 1.0 (design §8.4).
+    public double CostOfTimeFactor(Company company) => _standing.CatchUpFactor(company);
 
-    // Composite willingness the AI will pay, as a DIMENSIONLESS multiplier over base DIY (design §5.3/§8.1),
-    // NOT an absolute price. It stays multiplier-only on purpose: the base DIY oracle
-    // (ObtainResourcePriorityGate.Calc, even on the cleanCalc:true "pure read") is async — it awaits four
-    // sub-gates (ObtainResourcePriorityGate.cs:113/117/121/125) — so folding it in would require a blocking
-    // wait inside the arbiter's synchronous OrderBy sort key, the deadlock hazard we must avoid. The buy
-    // sites apply NeedFactor and the CalcCostMagnitude basis Postfix applies CostOfTimeFactor, so the full
-    // absolute product is realized by call-site composition, not here. Consequence: the price sub-order
-    // (OfferArbiter PriceAscending/Descending) ranks by premium factors only and every buyer ties at 1.0
-    // when both price levers are off.
-    public double WhatWillPay(CompanyBehaviour? cb, ObjectInfo? where, ResourceDefinition? rd, double qty) {
-        var company = cb?.Company;
-        double catchUp = company != null ? CostOfTimeFactor(company) : 1.0;
-        return catchUp * NeedFactor(cb, where, rd, qty, true);
+    // Multiplier-only by design: the base DIY oracle (ObtainResourcePriorityGate.Calc) is async — it awaits four
+    // sub-gates (ObtainResourcePriorityGate.cs:113/117/121/125) — so folding it into the arbiter's sync OrderBy sort key would deadlock (design §5.3).
+    public double WhatWillPay(CompanyBehaviour? companyBehaviour, ObjectInfo? where, ResourceDefinition? resourceDefinition, double quantity) {
+        var company = companyBehaviour?.Company;
+        var catchUp = company != null ? CostOfTimeFactor(company) : 1.0;
+        return catchUp * NeedFactor(companyBehaviour, where, resourceDefinition, quantity, true);
     }
 }

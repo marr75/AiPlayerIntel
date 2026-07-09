@@ -21,222 +21,198 @@ using UnityEngine;
 namespace AiPlayerIntel.Intel;
 
 static class Collectors {
-    readonly struct BomEntry {
-        public readonly ResourceDefinition Rd;
-        public readonly double Qty;
-        public readonly ObjectInfo? Loc;
-        public readonly string LocName;
-        public readonly string SourceLabel;
-        public BomEntry(ResourceDefinition rd, double qty, ObjectInfo? loc, string locName, string sourceLabel) {
-            Rd = rd; Qty = qty; Loc = loc; LocName = locName; SourceLabel = sourceLabel;
-        }
-    }
-
-    sealed class Row {
-        public ResourceDefinition? Rd;
-        public string LocName = "";
-        public ObjectInfo? Loc;
-        public bool IsBom;
-        public string SourceObjective = "";
-        public double PrimaryQty;
-        public double Demand;
-        public double Reservation;
-        public double Have;
-        public double? Rate;
-        public double Deficit;
-        public double? EtaDays;
-        public ResourceState State;
-        public double? PostedPrice;
-        public bool? PostedIsBuy;
-        public double PostedCountLeft;
-        public double? DiyPerUnit;
-        public double? MaxBid;
-        public double PriceQty;
-        public double? DiyMoneyPerUnit;
-        public double? DiyTotalDays;
-    }
+    static readonly Regex LinkRegex = new("<link=\"([^:\"]+):([^\"]+)\">(.*?)</link>", RegexOptions.Singleline);
+    static readonly Regex TagRegex = new("<[^>]+>");
 
     public static async UniTask<IntelSnapshot> Build(bool diyActive) {
         var companies = new List<CompanyIntel>();
         var rows = new List<IntelRow>();
-        var gm = MonoBehaviourSingleton<GameManager>.Instance;
-        if (gm == null || gm.Companies == null) {
-            return new IntelSnapshot { Companies = companies, Rows = rows, BuiltAt = Time.realtimeSinceStartup, DiyActive = diyActive };
+        var gameManager = MonoBehaviourSingleton<GameManager>.Instance;
+        if (gameManager == null || gameManager.Companies == null) {
+            return new IntelSnapshot
+                { Companies = companies, Rows = rows, BuiltAt = Time.realtimeSinceStartup, DiyActive = diyActive };
         }
 
-        foreach (var company in gm.Companies) {
+        foreach (var company in gameManager.Companies) {
             if (company == null || company.IsPlayer) { continue; }
-            var cb = company.GetComponent<CompanyBehaviour>();
-            if (cb == null) { continue; }
-            if (!IsParticipating(company, cb)) { continue; }
+            var companyBehaviour = company.GetComponent<CompanyBehaviour>();
+            if (companyBehaviour == null) { continue; }
+            if (!IsParticipating(company, companyBehaviour)) { continue; }
 
             var key = company.ID ?? company.name;
-            var active = GetActiveObjective(company, cb);
-            var (bomObjectives, secondary) = CollectContractDemand(company, cb, active);
-            var hq = company.Definition != null ? company.mainObjectInfo : null;
+            var activeObjective = GetActiveObjective(company, companyBehaviour);
+            var (bomObjectives, secondary) = CollectContractDemand(company, companyBehaviour, activeObjective);
+            var headquarters = company.Definition != null ? company.mainObjectInfo : null;
             var bom = new List<BomEntry>();
-            foreach (var o in bomObjectives) { bom.AddRange(BuildBom(o, hq)); }
-            companies.Add(new CompanyIntel {
-                CompanyKey = key,
-                CompanyName = ResolveCompanyName(company),
-                CompanyIcon = company.Definition != null ? company.Definition.LogoImage : null,
-                IsWorldGovernment = company.Definition != null && company.Definition.IsWorldGovernment,
-                TimeValuePerDay = cb.AIConfig.costMultiplier.Time,
-                CostCalcType = cb.AIConfig.costCalcType.ToString(),
-                Current = BuildObjectiveLine(active),
-                Others = secondary,
-            });
-            rows.AddRange(await BuildResources(company, cb, diyActive, bom, key));
+            foreach (var objective in bomObjectives) { bom.AddRange(BuildBom(objective, headquarters)); }
+            companies.Add(
+                new CompanyIntel {
+                    CompanyKey = key,
+                    CompanyName = ResolveCompanyName(company),
+                    CompanyIcon = company.Definition != null ? company.Definition.LogoImage : null,
+                    IsWorldGovernment = company.Definition != null && company.Definition.IsWorldGovernment,
+                    TimeValuePerDay = companyBehaviour.AIConfig.costMultiplier.Time,
+                    CostCalcType = companyBehaviour.AIConfig.costCalcType.ToString(),
+                    Current = BuildObjectiveLine(activeObjective),
+                    Others = secondary,
+                }
+            );
+            rows.AddRange(await BuildResources(company, companyBehaviour, diyActive, bom, key));
         }
 
-        return new IntelSnapshot { Companies = companies, Rows = rows, BuiltAt = Time.realtimeSinceStartup, DiyActive = diyActive };
+        return new IntelSnapshot
+            { Companies = companies, Rows = rows, BuiltAt = Time.realtimeSinceStartup, DiyActive = diyActive };
     }
 
-    static bool IsParticipating(Company company, CompanyBehaviour cb) {
-        var def = company.Definition;
-        return (def != null && def.IsWorldGovernment) || cb.aiEnabled;
+    static bool IsParticipating(Company company, CompanyBehaviour companyBehaviour) {
+        var definition = company.Definition;
+        return (definition != null && definition.IsWorldGovernment) || companyBehaviour.aiEnabled;
     }
 
-    static (Objective o, CompanyObjectiveData od, Contract running, CompanyContractData pcd)? GetActiveObjective(
-        Company company, CompanyBehaviour cb) {
-        var cm = MonoBehaviourSingleton<ContractManager>.Instance;
-        if (cm == null || cm.allContracts == null) { return null; }
+    static (Objective objective, CompanyObjectiveData objectiveData, Contract running, CompanyContractData companyContractData)? GetActiveObjective(
+        Company company,
+        CompanyBehaviour companyBehaviour
+    ) {
+        var contractManager = MonoBehaviourSingleton<ContractManager>.Instance;
+        if (contractManager == null || contractManager.allContracts == null) { return null; }
 
-        var active = cm.allContracts
-            .Where(c => c != null && c.ContractStateForCompany(company) == ContractManager.EContractState.Active)
+        var activeContracts = contractManager.allContracts
+            .Where(contract => contract != null && contract.ContractStateForCompany(company) == ContractManager.EContractState.Active)
             .ToList();
-        if (active.Count == 0) { return null; }
+        if (activeContracts.Count == 0) { return null; }
 
-        var head = cb.newContractsQueue.Count > 0 ? cb.newContractsQueue.Peek() : null;
-        var running = active.FirstOrDefault(c => c == head) ?? active[0];
+        var queueHead = companyBehaviour.newContractsQueue.Count > 0 ? companyBehaviour.newContractsQueue.Peek() : null;
+        var running = activeContracts.FirstOrDefault(contract => contract == queueHead) ?? activeContracts[0];
 
-        if (!running.PerCompanyContractData.TryGetValue(company, out var pcd) || pcd == null) { return null; }
-        var od = pcd.ObjectivesDataList?.FirstOrDefault(o => o != null && !o.IsComplete);
-        if (od == null) { return null; }
-        var o = od.Objective;
-        if (o == null) { return null; }
-        return (o, od, running, pcd);
+        if (!running.PerCompanyContractData.TryGetValue(company, out var companyContractData) || companyContractData == null) { return null; }
+        var objectiveData = companyContractData.ObjectivesDataList?.FirstOrDefault(entry => entry != null && !entry.IsComplete);
+        if (objectiveData == null) { return null; }
+        var objective = objectiveData.Objective;
+        if (objective == null) { return null; }
+        return (objective, objectiveData, running, companyContractData);
     }
 
-    static ObjectiveLine? BuildObjectiveLine((Objective o, CompanyObjectiveData od, Contract running, CompanyContractData pcd)? active) {
-        return active is { } a ? BuildLine(a.running, a.pcd, a.od) : null;
-    }
+    static ObjectiveLine? BuildObjectiveLine(
+        (Objective objective, CompanyObjectiveData objectiveData, Contract running, CompanyContractData companyContractData)? active
+    ) =>
+        active is { } activeValue ? BuildLine(activeValue.running, activeValue.companyContractData, activeValue.objectiveData) : null;
 
-    static ObjectiveLine BuildLine(Contract running, CompanyContractData pcd, CompanyObjectiveData od) {
-        var (segments, plain) = TokenizeObjective(od.GetText(false));
-        var o = od.Objective;
+    static ObjectiveLine BuildLine(Contract running, CompanyContractData companyContractData, CompanyObjectiveData objectiveData) {
+        var (segments, plain) = TokenizeObjective(objectiveData.GetText(false));
+        var objective = objectiveData.Objective;
         return new ObjectiveLine {
             ContractTitle = running.ContractDefinition != null ? running.ContractDefinition.TextNameMission : "",
             CurrentStepText = plain,
             Segments = segments,
-            Type = o != null ? o.objectiveType.ToString() : "",
-            State = pcd.currentState.ToString(),
-            HowMuch = o != null ? o.howMuch : 0,
-            HowMuchCurrent = od.howMuchCurrent,
+            Type = objective != null ? objective.objectiveType.ToString() : "",
+            State = companyContractData.currentState.ToString(),
+            HowMuch = objective != null ? objective.howMuch : 0,
+            HowMuchCurrent = objectiveData.howMuchCurrent,
         };
     }
 
     static (List<Objective> objectives, List<ObjectiveLine> secondary) CollectContractDemand(
-        Company company, CompanyBehaviour cb,
-        (Objective o, CompanyObjectiveData od, Contract running, CompanyContractData pcd)? primary) {
+        Company company,
+        CompanyBehaviour companyBehaviour,
+        (Objective objective, CompanyObjectiveData objectiveData, Contract running, CompanyContractData companyContractData)? primary
+    ) {
         var objectives = new List<Objective>();
         var secondary = new List<ObjectiveLine>();
-        var cm = MonoBehaviourSingleton<ContractManager>.Instance;
-        if (cm?.allContracts == null) { return (objectives, secondary); }
+        var contractManager = MonoBehaviourSingleton<ContractManager>.Instance;
+        if (contractManager?.allContracts == null) { return (objectives, secondary); }
         var running = primary?.running;
-        foreach (var c in cm.allContracts) {
-            if (c == null || c.ContractStateForCompany(company) != ContractManager.EContractState.Active) { continue; }
-            if (!c.PerCompanyContractData.TryGetValue(company, out var pcd) || pcd?.ObjectivesDataList == null) { continue; }
-            bool firstIncomplete = true;
-            foreach (var od in pcd.ObjectivesDataList) {
-                if (od == null || od.IsComplete || od.Objective == null) { continue; }
-                objectives.Add(od.Objective);
+        foreach (var contract in contractManager.allContracts) {
+            if (contract == null || contract.ContractStateForCompany(company) != ContractManager.EContractState.Active) { continue; }
+            if (!contract.PerCompanyContractData.TryGetValue(company, out var companyContractData) || companyContractData?.ObjectivesDataList == null) {
+                continue;
+            }
+            var firstIncomplete = true;
+            foreach (var objectiveData in companyContractData.ObjectivesDataList) {
+                if (objectiveData == null || objectiveData.IsComplete || objectiveData.Objective == null) { continue; }
+                objectives.Add(objectiveData.Objective);
                 if (firstIncomplete) {
                     firstIncomplete = false;
-                    if (c != running) { secondary.Add(BuildLine(c, pcd, od)); }
+                    if (contract != running) { secondary.Add(BuildLine(contract, companyContractData, objectiveData)); }
                 }
             }
         }
         return (objectives, secondary);
     }
 
-    static readonly Regex LinkRx = new("<link=\"([^:\"]+):([^\"]+)\">(.*?)</link>", RegexOptions.Singleline);
-    static readonly Regex TagRx = new("<[^>]+>");
-
     static (IReadOnlyList<ObjSegment>, string) TokenizeObjective(string? raw) {
-        var segs = new List<ObjSegment>();
+        var segments = new List<ObjSegment>();
         var plain = new StringBuilder();
-        if (string.IsNullOrEmpty(raw)) { return (segs, ""); }
-        int pos = 0;
-        foreach (Match m in LinkRx.Matches(raw)) {
-            if (m.Index > pos) { AddText(segs, plain, raw!.Substring(pos, m.Index - pos)); }
-            var inner = TagRx.Replace(m.Groups[3].Value, "").Trim();
-            var icon = ResolveLinkIcon(m.Groups[1].Value, m.Groups[2].Value);
+        if (string.IsNullOrEmpty(raw)) { return (segments, ""); }
+        var position = 0;
+        foreach (Match match in LinkRegex.Matches(raw)) {
+            if (match.Index > position) { AddText(segments, plain, raw!.Substring(position, match.Index - position)); }
+            var inner = TagRegex.Replace(match.Groups[3].Value, "").Trim();
+            var icon = ResolveLinkIcon(match.Groups[1].Value, match.Groups[2].Value);
             if (icon != null) {
-                segs.Add(new ObjSegment { Kind = ObjSegmentKind.Icon, Icon = icon, Text = inner });
+                segments.Add(new ObjSegment { Kind = ObjSegmentKind.Icon, Icon = icon, Text = inner });
                 plain.Append(inner);
             } else {
-                AddText(segs, plain, inner);
+                AddText(segments, plain, inner);
             }
-            pos = m.Index + m.Length;
+            position = match.Index + match.Length;
         }
-        if (pos < raw!.Length) { AddText(segs, plain, raw.Substring(pos)); }
-        return (segs, plain.ToString());
+        if (position < raw!.Length) { AddText(segments, plain, raw.Substring(position)); }
+        return (segments, plain.ToString());
     }
 
-    static void AddText(List<ObjSegment> segs, StringBuilder plain, string chunk) {
-        var t = TagRx.Replace(chunk, "");
-        if (t.Length == 0) { return; }
-        plain.Append(t);
-        if (segs.Count > 0 && segs[^1].Kind == ObjSegmentKind.Text) {
-            segs[^1] = new ObjSegment { Kind = ObjSegmentKind.Text, Text = segs[^1].Text + t };
+    static void AddText(List<ObjSegment> segments, StringBuilder plain, string chunk) {
+        var text = TagRegex.Replace(chunk, "");
+        if (text.Length == 0) { return; }
+        plain.Append(text);
+        if (segments.Count > 0 && segments[^1].Kind == ObjSegmentKind.Text) {
+            segments[^1] = new ObjSegment { Kind = ObjSegmentKind.Text, Text = segments[^1].Text + text };
         } else {
-            segs.Add(new ObjSegment { Kind = ObjSegmentKind.Text, Text = t });
+            segments.Add(new ObjSegment { Kind = ObjSegmentKind.Text, Text = text });
         }
     }
 
     static Sprite? ResolveLinkIcon(string className, string rawId) {
         switch (className) {
-            case "ObjectInfo":
-                return int.TryParse(rawId, out var oid) ? ResolveObjectInfo(oid)?.ImagePlanetUI : null;
+            case "ObjectInfo": return int.TryParse(rawId, out var objectId) ? ResolveObjectInfo(objectId)?.ImagePlanetUI : null;
             case "ResourceDefinition":
-                var asm = SerializedMonoBehaviourSingleton<AllScriptableObjectManager>.Instance;
-                var rd = asm?.AllResourceDefinitions?.ListNotEmpty?
-                    .FirstOrDefault(d => d != null && d.ID == rawId);
-                return rd != null ? rd.Sprite : null;
-            default:
-                return null;
+                var assembly = SerializedMonoBehaviourSingleton<AllScriptableObjectManager>.Instance;
+                var resourceDefinition = assembly?.AllResourceDefinitions?.ListNotEmpty?
+                    .FirstOrDefault(candidate => candidate != null && candidate.ID == rawId);
+                return resourceDefinition != null ? resourceDefinition.Sprite : null;
+            default: return null;
         }
     }
 
-    static IReadOnlyList<BomEntry> BuildBom(Objective? o, ObjectInfo? hq) {
+    static IReadOnlyList<BomEntry> BuildBom(Objective? objective, ObjectInfo? headquarters) {
         var bom = new List<BomEntry>();
-        if (o == null) { return bom; }
+        if (objective == null) { return bom; }
 
         // Build types resolve their location from fromID (game: CompanyObjectiveData:777, fromID==-1 =
         // any location, shown against HQ here); Deliver resolves from toID (CompanyObjectiveData:862).
-        bool isBuild = o.objectiveType is EObjectiveType.CreateSpaceCraft or EObjectiveType.CreateVehicle or EObjectiveType.BuildFacility;
-        var id = isBuild ? o.fromID : o.toID;
-        var loc = id > 0 ? ResolveObjectInfo(id) : hq;
-        var locName = loc != null ? loc.ObjectName : ResolveObjectName(id);
+        var isBuild = objective.objectiveType is EObjectiveType.CreateSpaceCraft
+            or EObjectiveType.CreateVehicle
+            or EObjectiveType.BuildFacility;
+        var id = isBuild ? objective.fromID : objective.toID;
+        var location = id > 0 ? ResolveObjectInfo(id) : headquarters;
+        var locationName = location != null ? location.ObjectName : ResolveObjectName(id);
 
-        switch (o.objectiveType) {
+        switch (objective.objectiveType) {
             case EObjectiveType.CreateSpaceCraft:
             case EObjectiveType.CreateVehicle:
             case EObjectiveType.BuildFacility:
-                var src = o.productItem != null ? Localize(o.productItem) : o.objectiveType.ToString();
-                var price = ProductPrice(o.productItem);
+                var source = objective.productItem != null ? Localize(objective.productItem) : objective.objectiveType.ToString();
+                var price = ProductPrice(objective.productItem);
                 if (price?.ListResources != null) {
-                    foreach (var one in price.ListResources) {
-                        var rd = one.ResourceDefinition;
-                        if (rd == null) { continue; }
-                        bom.Add(new BomEntry(rd, one.Price * o.howMuch, loc, locName, src));
+                    foreach (var resourceCost in price.ListResources) {
+                        var resourceDefinition = resourceCost.ResourceDefinition;
+                        if (resourceDefinition == null) { continue; }
+                        bom.Add(new BomEntry(resourceDefinition, resourceCost.Price * objective.howMuch, location, locationName, source));
                     }
                 }
                 break;
             case EObjectiveType.Deliver:
-                if (o.productItem is ResourceDefinition dr) {
-                    bom.Add(new BomEntry(dr, o.howMuch, loc, locName, ""));
+                if (objective.productItem is ResourceDefinition deliverResource) {
+                    bom.Add(new BomEntry(deliverResource, objective.howMuch, location, locationName, ""));
                 }
                 break;
         }
@@ -245,210 +221,273 @@ static class Collectors {
 
     static ResourcePrice? ProductPrice(MyIDScriptableObject? item) {
         switch (item) {
-            case SpacecraftType sc: return sc.spaceCraftConstructDefault?.Price;
-            case LaunchVehicleType lv: return lv.spaceCraftConstructDefault?.Price;
-            case FacilityBaseDescriptor f: return f.Price;
+            case SpacecraftType spacecraft: return spacecraft.spaceCraftConstructDefault?.Price;
+            case LaunchVehicleType launchVehicle: return launchVehicle.spaceCraftConstructDefault?.Price;
+            case FacilityBaseDescriptor facility: return facility.Price;
             default: return null;
         }
     }
 
     static async UniTask<IReadOnlyList<IntelRow>> BuildResources(
-        Company company, CompanyBehaviour cb, bool diyActive, IReadOnlyList<BomEntry> bom, string companyKey) {
-        var rows = new Dictionary<(ResourceDefinition rd, string loc), Row>();
-        var hq = company.Definition != null ? company.mainObjectInfo : null;
-        int hqId = hq != null ? hq.id : 0;
+        Company company,
+        CompanyBehaviour companyBehaviour,
+        bool diyActive,
+        IReadOnlyList<BomEntry> bom,
+        string companyKey
+    ) {
+        var rows = new Dictionary<(ResourceDefinition resourceDefinition, string locationName), Row>();
+        var headquarters = company.Definition != null ? company.mainObjectInfo : null;
+        var headquartersId = headquarters != null ? headquarters.id : 0;
 
-        Row Get(ResourceDefinition rd, string locName, ObjectInfo? loc) {
-            var key = (rd, locName);
-            if (!rows.TryGetValue(key, out var r)) {
-                r = new Row { Rd = rd, LocName = locName, Loc = loc };
-                rows[key] = r;
+        Row Get(ResourceDefinition resourceDefinition, string locationName, ObjectInfo? location) {
+            var key = (resourceDefinition, locationName);
+            if (!rows.TryGetValue(key, out var row)) {
+                row = new Row { ResourceDefinition = resourceDefinition, LocationName = locationName, Location = location };
+                rows[key] = row;
             }
-            if (r.Loc == null && loc != null) { r.Loc = loc; }
-            return r;
+            if (row.Location == null && location != null) { row.Location = location; }
+            return row;
         }
 
-        foreach (var b in bom) {
-            if (b.Rd == null) { continue; }
-            var r = Get(b.Rd, b.LocName, b.Loc);
-            r.IsBom = true;
-            r.PrimaryQty += b.Qty;
-            if (b.SourceLabel.Length > 0 && !r.SourceObjective.Contains(b.SourceLabel)) {
-                r.SourceObjective = r.SourceObjective.Length == 0 ? b.SourceLabel : $"{r.SourceObjective}, {b.SourceLabel}";
-            }
-        }
-
-        var mom = MonoBehaviourSingleton<MarketOfferManager>.Instance;
-        if (mom?.Offerts != null) {
-            foreach (var o in mom.Offerts) {
-                if (o == null || o.Company != company || o.Rd == null) { continue; }
-                var loc = o.WhereOffer;
-                var locName = loc != null ? loc.ObjectName : "";
-                var r = Get(o.Rd, locName, loc);
-                r.PostedPrice = o.PricePerUnit;
-                r.PostedIsBuy = o.BuySell;
-                r.PostedCountLeft = o.CountLeft;
+        foreach (var entry in bom) {
+            if (entry.ResourceDefinition == null) { continue; }
+            var row = Get(entry.ResourceDefinition, entry.LocationName, entry.Location);
+            row.IsBom = true;
+            row.PrimaryQty += entry.Quantity;
+            if (entry.SourceLabel.Length > 0 && !row.SourceObjective.Contains(entry.SourceLabel)) {
+                row.SourceObjective = row.SourceObjective.Length == 0
+                    ? entry.SourceLabel
+                    : $"{row.SourceObjective}, {entry.SourceLabel}";
             }
         }
 
-        var demand = cb.aiStateData.resourceDemandPerObject;
-        var reservation = cb.aiStateData.resourceReservationPerObject;
+        var marketOfferManager = MonoBehaviourSingleton<MarketOfferManager>.Instance;
+        if (marketOfferManager?.Offerts != null) {
+            foreach (var offer in marketOfferManager.Offerts) {
+                if (offer == null || offer.Company != company || offer.Rd == null) { continue; }
+                var location = offer.WhereOffer;
+                var locationName = location != null ? location.ObjectName : "";
+                var row = Get(offer.Rd, locationName, location);
+                row.PostedPrice = offer.PricePerUnit;
+                row.PostedIsBuy = offer.BuySell;
+                row.PostedCountLeft = offer.CountLeft;
+            }
+        }
+
+        var demand = companyBehaviour.aiStateData.resourceDemandPerObject;
+        var reservation = companyBehaviour.aiStateData.resourceReservationPerObject;
         if (demand != null) {
-            foreach (var kv in demand) {
-                var idForObj = kv.Key;
-                var perRes = kv.Value;
-                if (perRes == null) { continue; }
-                var loc = idForObj?.Object;
-                var locName = loc != null ? loc.ObjectName : ResolveObjectName(idForObj?.ID ?? 0);
-                foreach (var rkv in perRes) {
-                    var rd = rkv.Key;
-                    if (rd == null) { continue; }
-                    double dem = rkv.Value;
-                    double res = 0;
-                    if (reservation != null && idForObj != null
-                        && reservation.TryGetValue(idForObj, out var rr) && rr != null
-                        && rr.TryGetValue(rd, out var rv)) {
-                        res = rv;
+            foreach (var demandEntry in demand) {
+                var objectKey = demandEntry.Key;
+                var demandPerResource = demandEntry.Value;
+                if (demandPerResource == null) { continue; }
+                var location = objectKey?.Object;
+                var locationName = location != null ? location.ObjectName : ResolveObjectName(objectKey?.ID ?? 0);
+                foreach (var resourceDemand in demandPerResource) {
+                    var resourceDefinition = resourceDemand.Key;
+                    if (resourceDefinition == null) { continue; }
+                    var demandValue = resourceDemand.Value;
+                    double reservationAmount = 0;
+                    if (reservation != null
+                        && objectKey != null
+                        && reservation.TryGetValue(objectKey, out var reservationForObject)
+                        && reservationForObject != null
+                        && reservationForObject.TryGetValue(resourceDefinition, out var reservationValue)) {
+                        reservationAmount = reservationValue;
                     }
-                    if (dem <= 0 && res <= 0) { continue; }
-                    var r = Get(rd, locName, loc);
-                    r.Demand = dem;
-                    r.Reservation = res;
+                    if (demandValue <= 0 && reservationAmount <= 0) { continue; }
+                    var row = Get(resourceDefinition, locationName, location);
+                    row.Demand = demandValue;
+                    row.Reservation = reservationAmount;
                 }
             }
         }
 
-        foreach (var r in rows.Values) {
-            var (have, rate) = StockAndRate(company, r.Loc, r.Rd);
-            r.Have = have;
-            r.Rate = rate;
-            double need = r.PrimaryQty;
-            r.Deficit = Math.Max(0, need - have);
-            r.EtaDays = rate is { } rt && rt > 0 && r.Deficit > 0 ? r.Deficit / rt : null;
-            r.State = need > 0 && have >= need ? ResourceState.Stocked
-                : r.Deficit > 0 && r.Demand > 0 ? ResourceState.Acquiring
-                : r.Deficit > 0 ? ResourceState.Needed
+        foreach (var row in rows.Values) {
+            var (have, rate) = StockAndRate(company, row.Location, row.ResourceDefinition);
+            row.Have = have;
+            row.Rate = rate;
+            var need = row.PrimaryQty;
+            row.Deficit = Math.Max(0, need - have);
+            row.EtaDays = rate is { } rateValue && rateValue > 0 && row.Deficit > 0 ? row.Deficit / rateValue : null;
+            row.State = need > 0 && have >= need ? ResourceState.Stocked
+                : row.Deficit > 0 && row.Demand > 0 ? ResourceState.Acquiring
+                : row.Deficit > 0 ? ResourceState.Needed
                 : ResourceState.None;
         }
 
         if (diyActive) {
-            var mult = cb.AIConfig.takeOfferBuyUnitCostMultiplier;
-            foreach (var r in rows.Values) {
-                if (r.Rd == null || r.Loc == null) { continue; }
-                if (!Services.Config.ShowAllMarkets.Value && !r.IsBom && !r.PostedPrice.HasValue) { continue; }
-                double q = NeedQty(r);
-                if (q <= 0) { continue; }
-                r.PriceQty = q;
-                var cost = await DiyPerUnit(cb, r.Loc, r.Rd, (float)q);
-                if (cost is not { } c) { continue; }
-                var perUnit = c / q;
-                r.DiyPerUnit = FiniteMagnitude(perUnit);
-                r.MaxBid = FiniteMagnitude((c * mult) / q);
-                r.DiyMoneyPerUnit = Finite(perUnit.Money);
-                r.DiyTotalDays = Finite(c.Time);
+            var costMultiplier = companyBehaviour.AIConfig.takeOfferBuyUnitCostMultiplier;
+            foreach (var row in rows.Values) {
+                if (row.ResourceDefinition == null || row.Location == null) { continue; }
+                if (!Services.Config.ShowAllMarkets.Value && !row.IsBom && !row.PostedPrice.HasValue) { continue; }
+                var quantity = NeedQty(row);
+                if (quantity <= 0) { continue; }
+                row.PriceQty = quantity;
+                var cost = await DiyPerUnit(companyBehaviour, row.Location, row.ResourceDefinition, (float)quantity);
+                if (cost is not { } costValue) { continue; }
+                var perUnit = costValue / quantity;
+                row.DiyPerUnit = FiniteMagnitude(perUnit);
+                row.MaxBid = FiniteMagnitude(costValue * costMultiplier / quantity);
+                row.DiyMoneyPerUnit = Finite(perUnit.Money);
+                row.DiyTotalDays = Finite(costValue.Time);
             }
         }
 
         return rows.Values
-            .OrderByDescending(r => r.IsBom)
-            .ThenByDescending(r => r.Demand + r.Reservation)
-            .Select(r => new IntelRow {
-                CompanyKey = companyKey,
-                BodyId = r.Loc != null ? r.Loc.id : 0,
-                BodyName = r.LocName,
-                BodyIcon = r.Loc != null ? r.Loc.ImagePlanetUI : null,
-                Body = r.Loc,
-                IsHq = hqId != 0 && r.Loc != null && r.Loc.id == hqId,
-                Line = new ResourceLine {
-                    Resource = Localize(r.Rd),
-                    Rd = r.Rd,
-                    ResourceIcon = r.Rd != null ? r.Rd.Sprite : null,
-                    Location = r.LocName,
-                    IsBom = r.IsBom,
-                    Provenance = Provenance(r),
-                    PrimaryQty = r.PrimaryQty,
-                    Demand = r.Demand,
-                    Reservation = r.Reservation,
-                    Have = r.Have,
-                    Rate = r.Rate,
-                    Deficit = r.Deficit,
-                    EtaDays = r.EtaDays,
-                    State = r.State,
-                    PostedPrice = r.PostedPrice,
-                    PostedIsBuy = r.PostedIsBuy,
-                    PostedCountLeft = r.PostedCountLeft,
-                    DiyPerUnit = r.DiyPerUnit,
-                    MaxBid = r.MaxBid,
-                    PriceQty = r.PriceQty,
-                    DiyMoneyPerUnit = r.DiyMoneyPerUnit,
-                    DiyTotalDays = r.DiyTotalDays,
-                },
-            })
+            .OrderByDescending(row => row.IsBom)
+            .ThenByDescending(row => row.Demand + row.Reservation)
+            .Select(row => new IntelRow {
+                    CompanyKey = companyKey,
+                    BodyId = row.Location != null ? row.Location.id : 0,
+                    BodyName = row.LocationName,
+                    BodyIcon = row.Location != null ? row.Location.ImagePlanetUI : null,
+                    Body = row.Location,
+                    IsHq = headquartersId != 0 && row.Location != null && row.Location.id == headquartersId,
+                    Line = new ResourceLine {
+                        Resource = Localize(row.ResourceDefinition),
+                        Rd = row.ResourceDefinition,
+                        ResourceIcon = row.ResourceDefinition != null ? row.ResourceDefinition.Sprite : null,
+                        Location = row.LocationName,
+                        IsBom = row.IsBom,
+                        Provenance = Provenance(row),
+                        PrimaryQty = row.PrimaryQty,
+                        Demand = row.Demand,
+                        Reservation = row.Reservation,
+                        Have = row.Have,
+                        Rate = row.Rate,
+                        Deficit = row.Deficit,
+                        EtaDays = row.EtaDays,
+                        State = row.State,
+                        PostedPrice = row.PostedPrice,
+                        PostedIsBuy = row.PostedIsBuy,
+                        PostedCountLeft = row.PostedCountLeft,
+                        DiyPerUnit = row.DiyPerUnit,
+                        MaxBid = row.MaxBid,
+                        PriceQty = row.PriceQty,
+                        DiyMoneyPerUnit = row.DiyMoneyPerUnit,
+                        DiyTotalDays = row.DiyTotalDays,
+                    },
+                }
+            )
             .ToList();
     }
 
-    static (double have, double? rate) StockAndRate(Company company, ObjectInfo? loc, ResourceDefinition? rd) {
-        if (loc == null || rd == null) { return (0, null); }
-        var row = loc.GetObjectInfoData(company)?.FastGetResource(rd);
+    static (double have, double? rate) StockAndRate(Company company, ObjectInfo? location, ResourceDefinition? resourceDefinition) {
+        if (location == null || resourceDefinition == null) { return (0, null); }
+        var row = location.GetObjectInfoData(company)?.FastGetResource(resourceDefinition);
         return row != null ? (row.Value, row.Balance) : (0, null);
     }
 
-    static double NeedQty(Row r) {
-        if (r.PrimaryQty > 0) { return r.PrimaryQty; }
-        if (r.Demand > 0) { return r.Demand; }
-        if (r.PostedPrice.HasValue && r.PostedCountLeft > 0) { return r.PostedCountLeft; }
+    static double NeedQty(Row row) {
+        if (row.PrimaryQty > 0) { return row.PrimaryQty; }
+        if (row.Demand > 0) { return row.Demand; }
+        if (row.PostedPrice.HasValue && row.PostedCountLeft > 0) { return row.PostedCountLeft; }
         return 1;
     }
 
-    static string Provenance(Row r) {
-        if (r.IsBom) { return r.SourceObjective.Length > 0 ? $"for {r.SourceObjective}" : ""; }
-        if (!r.PostedPrice.HasValue && r.Demand > 0) { return "sourcing here (acquiring)"; }
+    static string Provenance(Row row) {
+        if (row.IsBom) { return row.SourceObjective.Length > 0 ? $"for {row.SourceObjective}" : ""; }
+        if (!row.PostedPrice.HasValue && row.Demand > 0) { return "sourcing here (acquiring)"; }
         return "";
     }
 
-    static async UniTask<CompanyCost?> DiyPerUnit(CompanyBehaviour cb, ObjectInfo? where, ResourceDefinition rd, float howMuch) {
-        if (where == null || rd == null) { return null; }
+    static async UniTask<CompanyCost?> DiyPerUnit(
+        CompanyBehaviour companyBehaviour,
+        ObjectInfo? where,
+        ResourceDefinition resourceDefinition,
+        float howMuch
+    ) {
+        if (where == null || resourceDefinition == null) { return null; }
         try {
             return await ObtainResourcePriorityGate.Calc(
-                cb, null, null, cb.InvalidCost, CancellationToken.None,
-                where, rd, howMuch, cleanCalc: true);
-        } catch (Exception e) {
-            Plugin.Log.LogWarning($"DIY calc failed for {Localize(rd)}: {e.Message}");
+                companyBehaviour,
+                null,
+                null,
+                companyBehaviour.InvalidCost,
+                CancellationToken.None,
+                where,
+                resourceDefinition,
+                howMuch,
+                true
+            );
+        } catch (Exception exception) {
+            Plugin.Log.LogWarning($"DIY calc failed for {Localize(resourceDefinition)}: {exception.Message}");
             return null;
         }
     }
 
     static double? FiniteMagnitude(CompanyCost? cost) {
-        if (cost is not { } c) { return null; }
-        return Finite(c.Magnitude);
+        if (cost is not { } costValue) { return null; }
+        return Finite(costValue.Magnitude);
     }
 
-    static double? Finite(double v) => double.IsNaN(v) || double.IsInfinity(v) ? null : v;
+    static double? Finite(double value) => double.IsNaN(value) || double.IsInfinity(value) ? null : value;
 
     static string ResolveCompanyName(Company company) {
-        var s = company.GetTranslationName();
-        return string.IsNullOrEmpty(s) ? company.ID ?? company.name : s;
+        var translatedName = company.GetTranslationName();
+        return string.IsNullOrEmpty(translatedName) ? company.ID ?? company.name : translatedName;
     }
 
     static string Localize(MyIDScriptableObject? item) {
         if (item == null) { return "?"; }
-        var s = LEManager.Get(item.IDToTranslate);
-        return string.IsNullOrEmpty(s) ? item.ID : s;
+        var localized = LEManager.Get(item.IDToTranslate);
+        return string.IsNullOrEmpty(localized) ? item.ID : localized;
     }
 
     static ObjectInfo? ResolveObjectInfo(int id) {
         if (id <= 0) { return null; }
-        var oim = MonoBehaviourSingleton<ObjectInfoManager>.Instance;
-        var all = oim != null ? oim.allObjectInfos : null;
+        var objectInfoManager = MonoBehaviourSingleton<ObjectInfoManager>.Instance;
+        var all = objectInfoManager != null ? objectInfoManager.allObjectInfos : null;
         if (all == null) { return null; }
-        foreach (var oi in all) {
-            if (oi != null && oi.id == id) { return oi; }
+        foreach (var objectInfo in all) {
+            if (objectInfo != null && objectInfo.id == id) { return objectInfo; }
         }
         return null;
     }
 
     static string ResolveObjectName(int id) {
-        var oi = ResolveObjectInfo(id);
-        return oi != null ? oi.ObjectName : "";
+        var objectInfo = ResolveObjectInfo(id);
+        return objectInfo != null ? objectInfo.ObjectName : "";
+    }
+
+    readonly struct BomEntry {
+        public readonly ResourceDefinition ResourceDefinition;
+        public readonly double Quantity;
+        public readonly ObjectInfo? Location;
+        public readonly string LocationName;
+        public readonly string SourceLabel;
+
+        public BomEntry(ResourceDefinition resourceDefinition, double quantity, ObjectInfo? location, string locationName, string sourceLabel) {
+            ResourceDefinition = resourceDefinition;
+            Quantity = quantity;
+            Location = location;
+            LocationName = locationName;
+            SourceLabel = sourceLabel;
+        }
+    }
+
+    sealed class Row {
+        public double Deficit;
+        public double Demand;
+        public double? DiyMoneyPerUnit;
+        public double? DiyPerUnit;
+        public double? DiyTotalDays;
+        public double? EtaDays;
+        public double Have;
+        public bool IsBom;
+        public ObjectInfo? Location;
+        public string LocationName = "";
+        public double? MaxBid;
+        public double PostedCountLeft;
+        public bool? PostedIsBuy;
+        public double? PostedPrice;
+        public double PriceQty;
+        public double PrimaryQty;
+        public double? Rate;
+        public ResourceDefinition? ResourceDefinition;
+        public double Reservation;
+        public string SourceObjective = "";
+        public ResourceState State;
     }
 }

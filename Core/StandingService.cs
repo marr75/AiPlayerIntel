@@ -6,42 +6,39 @@ using Manager;
 
 namespace AiPlayerIntel.Core;
 
-// Completed-contract standing index (wtp §1): a monotone, cross-company-comparable progress measure
-// (all AIs traverse the same unlock DAG from one root). Feeds BOTH catch-up expressions (design §2c):
-// CatchUpFactor (price-space, this slice) and Trailing (ordering-space, slice 7's FarthestBehind).
-// Cached; refreshed once per game day to avoid re-counting allContracts on every Magnitude call.
+// Monotone completed-contract standing index feeding both catch-up expressions; refreshed once per game day (wtp §1, design §2c).
 sealed class StandingService {
-    readonly Configuration _cfg;
+    readonly Configuration _config;
     readonly Dictionary<string, int> _completed = new();
-    int _leader;
     int _lastDay = int.MinValue;
+    int _leader;
 
-    public StandingService(Configuration cfg) { _cfg = cfg; }
+    public StandingService(Configuration config) { _config = config; }
 
     // leader - CompletedCount(c); 0 for the leader or the player. Ordering-space (slice 7).
-    public int Trailing(Company c) {
-        if (c == null || c.IsPlayer || c.ID == null) { return 0; }
+    public int Trailing(Company company) {
+        if (company == null || company.IsPlayer || company.ID == null) { return 0; }
         EnsureFresh();
-        int done = _completed.TryGetValue(c.ID, out var n) ? n : 0;
+        var done = _completed.TryGetValue(company.ID, out var count) ? count : 0;
         return Math.Max(0, _leader - done);
     }
 
     // clamp(1 + KCatchUp*trailingNorm, 1, MaxCatchUp); leader/player → 1.0. Price-space.
-    public double CatchUpFactor(Company c) {
-        if (c == null || c.IsPlayer || c.ID == null) { return 1.0; }
+    public double CatchUpFactor(Company company) {
+        if (company == null || company.IsPlayer || company.ID == null) { return 1.0; }
         EnsureFresh();
-        int done = _completed.TryGetValue(c.ID, out var n) ? n : 0;
-        int trailing = Math.Max(0, _leader - done);
+        var done = _completed.TryGetValue(company.ID, out var count) ? count : 0;
+        var trailing = Math.Max(0, _leader - done);
         if (trailing <= 0) { return 1.0; }
-        double span = _cfg.CatchUpStandingSpan.Value > 0 ? _cfg.CatchUpStandingSpan.Value : Math.Max(1, _leader);
-        double trailingNorm = Math.Min(1.0, Math.Max(0.0, trailing / Math.Max(1.0, span)));
-        double factor = 1.0 + _cfg.CatchUpK.Value * trailingNorm;
-        return Math.Min(factor, Math.Max(1.0, _cfg.CatchUpMax.Value));
+        double span = _config.CatchUpStandingSpan.Value > 0 ? _config.CatchUpStandingSpan.Value : Math.Max(1, _leader);
+        var trailingNorm = Math.Min(1.0, Math.Max(0.0, trailing / Math.Max(1.0, span)));
+        var factor = 1.0 + _config.CatchUpK.Value * trailingNorm;
+        return Math.Min(factor, Math.Max(1.0, _config.CatchUpMax.Value));
     }
 
     void EnsureFresh() {
-        var tc = MonoBehaviourSingleton<TimeController>.Instance;
-        int day = tc != null ? tc.TotalDays : 0;
+        var timeController = MonoBehaviourSingleton<TimeController>.Instance;
+        var day = timeController != null ? timeController.TotalDays : 0;
         if (day == _lastDay && _completed.Count > 0) { return; }
         _lastDay = day;
         Recompute();
@@ -51,16 +48,16 @@ sealed class StandingService {
     public void Recompute() {
         _completed.Clear();
         _leader = 0;
-        var gm = MonoBehaviourSingleton<GameManager>.Instance;
-        var cm = MonoBehaviourSingleton<ContractManager>.Instance;
-        if (gm?.Companies == null || cm?.allContracts == null) { return; }
-        foreach (var c in gm.Companies) {
-            if (c == null || c.IsPlayer || c.ID == null) { continue; }
-            int done = 0;
-            foreach (var k in cm.allContracts) {
-                if (k != null && k.ContractStateForCompany(c) == ContractManager.EContractState.Completed) { done++; }
+        var gameManager = MonoBehaviourSingleton<GameManager>.Instance;
+        var contractManager = MonoBehaviourSingleton<ContractManager>.Instance;
+        if (gameManager?.Companies == null || contractManager?.allContracts == null) { return; }
+        foreach (var company in gameManager.Companies) {
+            if (company == null || company.IsPlayer || company.ID == null) { continue; }
+            var done = 0;
+            foreach (var contract in contractManager.allContracts) {
+                if (contract != null && contract.ContractStateForCompany(company) == ContractManager.EContractState.Completed) { done++; }
             }
-            _completed[c.ID] = done;
+            _completed[company.ID] = done;
             if (done > _leader) { _leader = done; }
         }
     }

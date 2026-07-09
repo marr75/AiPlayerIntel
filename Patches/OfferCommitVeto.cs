@@ -5,11 +5,10 @@ using HarmonyLib;
 
 namespace AiPlayerIntel.Patches;
 
-// Commit choke point (research-fair-offer-allocation.md §4): the last synchronous gate before resources/money
-// move. Vetoes a non-grantee AI purchase of an arbiter-tracked offer while a conflicting grant lease is live,
-// covering both the reactive child-4 fulfill and the proactive BuyFromOffers path. Kept as its own class,
-// SEPARATE from the observe Postfix (OfferObserver), so Harmony's Prefix-before-Postfix pass order guarantees
-// the observer never logs a vetoed attempt. No-op for the player and for untracked offers.
+// Commit veto (research-fair-offer-allocation.md §4): last sync gate before resources move; blocks a non-grantee
+// AI buy of a tracked offer under a live grant lease, covering both the reactive child-4 fulfill and the proactive
+// BuyFromOffers path. Separate class from OfferObserver so Prefix runs before its Postfix, never logging a vetoed
+// attempt. No-op for player/untracked.
 [HarmonyPatch(typeof(Offer), nameof(Offer.FullFill))]
 static class OfferCommitVeto {
     static bool Prepare() => Services.Config.MasterEnable.Value;
