@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <!-- One env var configures every mod: set SOLAR_EXPANSE_DIR. -->
+    <GameDir Condition="'$(GameDir)'==''">$(SOLAR_EXPANSE_DIR)</GameDir>
+    <ManagedDir>$(GameDir)\Solar Expanse_Data\Managed</ManagedDir>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+
+  <Target Name="RequireGameDir" BeforeTargets="PrepareForBuild;ResolveAssemblyReferences">
+    <Error Condition="'$(GameDir)'==''"
+           Text="Set the SOLAR_EXPANSE_DIR environment variable to your Solar Expanse install path." />
+  </Target>
+</Project>
