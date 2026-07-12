@@ -5,7 +5,7 @@
         <AssemblyName>AiPlayerIntel</AssemblyName>
         <Product>AiPlayerIntel</Product>
         <Version>0.1.0</Version>
-        <BepInExPluginGuid>matt.solarexpanse.aiplayerintel</BepInExPluginGuid>
+        <BepInExPluginGuid>marr75.solarexpanse.aiplayerintel</BepInExPluginGuid>
     </PropertyGroup>
 
     <ItemGroup>
