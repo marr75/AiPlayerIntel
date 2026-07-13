@@ -9,9 +9,6 @@ namespace AiPlayerIntel.Core;
 
 // Owns every price factor as a dimensionless multiplier over base DIY cost, never a from-scratch price (design §8.5).
 sealed class Willingness {
-    // Clamp so assumedMaxCatchUp(2.0) * buyMult(0.9) * (1+f) <= 3 (design §5.4).
-    const double MaxFraction = 3.0 / (2.0 * 0.9) - 1.0; // ~0.667
-
     readonly Configuration _config;
     readonly DeficitService _deficit;
     readonly StandingService _standing;
@@ -21,6 +18,9 @@ sealed class Willingness {
         _deficit = deficit;
         _standing = standing;
     }
+
+    // Ceiling on the need premium, derived from the live CatchUpMax so buyMult(0.9) * catchUp * (1+f) stays sane.
+    double MaxFraction => 3.0 / (_config.CatchUpMax.Value * 0.9) - 1.0;
 
     // (1 + needPremium) for a needed good, else 1.0; composes multiplicatively with catch-up at each call site.
     public double NeedFactor(
@@ -38,7 +38,8 @@ sealed class Willingness {
         var deficit = _deficit.Evaluate(companyBehaviour, where, resourceDefinition);
         if (deficit.Class != NeedClass.ContractLinked) { return 1.0; } // non-needed → no premium
 
-        var fraction = Math.Min(_config.NeedPremiumFraction.Value, MaxFraction);
+        var cap = Math.Max(MaxFraction, Configuration.NeedPremiumFractionCeiling);
+        var fraction = Math.Min(_config.NeedPremiumFraction.Value, cap);
         if (fraction <= 0.0) { return 1.0; }
         if (_config.NeedPremiumCapToDeficit.Value && howMuch > 0.0) {
             var premiumQuantity = Math.Min(howMuch, deficit.UnmetVsNeed);

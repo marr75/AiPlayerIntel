@@ -22,12 +22,13 @@ sealed class IntelController : MonoBehaviour {
     internal bool InFlight { get; private set; }
 
     void Update() {
-        if (Input.GetKeyDown(Services.Config.ToggleKey.Value)) { IntelPanel.Toggle(); }
+        if (Services.Config.ToggleKey.Value.IsDown()) { IntelPanel.Toggle(); }
         _accumulatedSeconds += Time.deltaTime;
-        if (_accumulatedSeconds >= Mathf.Clamp(Services.Config.RefreshSeconds.Value, 1f, 30f) && !InFlight) {
-            _accumulatedSeconds = 0f;
-            Refresh().Forget();
+        if (!(_accumulatedSeconds >= Mathf.Clamp(Services.Config.RefreshSeconds.Value, 1f, 30f)) || InFlight) {
+            return;
         }
+        _accumulatedSeconds = 0f;
+        Refresh().Forget();
     }
 
     internal event Action? Changed;
