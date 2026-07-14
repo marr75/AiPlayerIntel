@@ -4,7 +4,7 @@
         <TargetFramework>net48</TargetFramework>
         <AssemblyName>AiPlayerIntel</AssemblyName>
         <Product>AiPlayerIntel</Product>
-        <Version>0.2.0</Version>
+        <Version>0.2.1</Version>
         <BepInExPluginGuid>marr75.solarexpanse.aiplayerintel</BepInExPluginGuid>
     </PropertyGroup>
 

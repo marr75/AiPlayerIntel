@@ -174,7 +174,7 @@ sealed class Configuration {
         StuckDays = c.Bind(
             "Stuck",
             "StuckThresholdDays",
-            30f,
+            365f,
             new ConfigDescription(stuckDaysDescription, new AcceptableValueRange<float>(1f, 1000f))
         );
 
