@@ -10,6 +10,6 @@
 
   <Target Name="RequireGameDir" BeforeTargets="PrepareForBuild;ResolveAssemblyReferences">
     <Error Condition="'$(GameDir)'==''"
-           Text="Set the SOLAR_EXPANSE_DIR environment variable to your Solar Expanse install path." />
+           Text="Set the SOLAR_EXPANSE_DIR environment variable to your Solar Expanse install path."/>
   </Target>
 </Project>

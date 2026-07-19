@@ -20,7 +20,7 @@ sealed class Willingness {
     }
 
     // Ceiling on the need premium, derived from the live CatchUpMax so buyMult(0.9) * catchUp * (1+f) stays sane.
-    double MaxFraction => 3.0 / (_config.CatchUpMax.Value * 0.9) - 1.0;
+    double MaxFraction { get => 3.0 / (_config.CatchUpMax.Value * 0.9) - 1.0; }
 
     // (1 + needPremium) for a needed good, else 1.0; composes multiplicatively with catch-up at each call site.
     public double NeedFactor(
