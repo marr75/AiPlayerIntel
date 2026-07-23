@@ -1,0 +1,56 @@
+[size=6][b]AI Player Intel[/b][/size]
+
+AI companies in Solar Expanse already run a real trading strategy. You just never got to see it, let alone act on it. AI Player Intel puts that strategy on screen.
+
+[img]https://github.com/marr75/AiPlayerIntel/raw/main/docs/images/aiplayerintel-hero.png[/img]
+
+[size=5][b]What it does[/b][/size]
+
+[list]
+[*]F10 intel panel: A tree of every body and AI company shows what each one has, wants, and the top price it would pay for a resource. Sortable, filterable, split into Trade and Other tabs. No more guessing what a rival needs before you undercut them.[/*]
+[*]Trailing AIs catch up: An AI that's fallen behind on completed contracts starts valuing its own time more: it bids higher and leans on faster (buy-now) options instead of slow self-production. The leader is untouched, so the game doesn't rubber-band; it just keeps the pack from falling permanently behind.[/*]
+[*]AIs pay more for what they actually need: An AI company chasing a contract will now outbid a company that's just browsing, instead of both paying the same flat price. This makes scouting who [i]needs[/i] a resource, and selling to them specifically, a real strategy.[/*]
+[*]Click to trade: Spot a resource a rival needs and click it: the Marketplace opens with an offer already filled in, so you never have to reach for the dev console to avoid the clunky Offer form.[/*]
+[/list]
+
+[img]https://github.com/marr75/AiPlayerIntel/raw/main/docs/images/aiplayerintel-ownership.png[/img]
+[img]https://github.com/marr75/AiPlayerIntel/raw/main/docs/images/aiplayerintel-marketplace.png[/img]
+
+[list]
+[*]Fair queueing for contested offers: When several AIs want the same thing you're selling, the mod briefly reserves the offer for whichever AI is the best fit, instead of resolving it by which one happened to check first. The reservation always expires on its own, so an offer never gets stuck waiting on an AI that changed its mind.[/*]
+[*]More AI buy orders on the market: AI companies advertise standing buy offers sooner instead of quietly self-sourcing everything, giving you more listings to sell into.[/*]
+[*]AIs that get stuck, un-stick: If an AI can't complete a step in its plan for too long, the mod forgives the missing resources and cancels the buy order that was blocking it, so it doesn't sit frozen for the rest of the game.[/*]
+[/list]
+
+[size=5][b]Before / after[/b][/size]
+
+Vanilla AI companies buy and sell at flat prices with no sense of urgency, so a trailing rival can fall behind forever and contested offers resolve on a first-come basis. With this mod, price and priority both respond to how much an AI actually needs something and how far behind it is. The market feels alive instead of static.
+
+[size=5][b]Configuration[/b][/size]
+
+Everything lives under the [font=Consolas]Gate[/font], [font=Consolas]CatchUp[/font], [font=Consolas]NeedPremium[/font], [font=Consolas]Stuck[/font], and [font=Consolas]PostBids[/font] sections of the config file. A few worth knowing about:
+
+[list]
+[*][/*]
+[/list]
+
+[font=Consolas]MasterEnable[/font] (Gate): the kill switch. Turn this off and every behavior patch goes quiet; only the intel panel keeps working.
+
+[list]
+[*][font=Consolas]CatchUp[/font] → [font=Consolas]Enabled[/font]: off by default. Turn it on if you want trailing AIs to actively close the gap on the leader instead of just falling further behind.[/*]
+[*][font=Consolas]NeedPremium[/font] → [font=Consolas]Enabled[/font] / [font=Consolas]Fraction[/font]: on by default; [font=Consolas]Fraction[/font] sets how big a premium (e.g. [font=Consolas]0.25[/font] = 25% extra) a needy AI will pay. Raise it if AI bidding wars still feel too tame.[/*]
+[*][font=Consolas]PostBids[/font] → [font=Consolas]Enabled[/font]: off by default. Turn it on for more AI buy orders to sell into, if you'd rather see more listings than fewer.[/*]
+[/list]
+
+The full config file lives at [font=Consolas]BepInEx/config/marr75.solarexpanse.aiplayerintel.cfg[/font]. If you have [url=https://thunderstore.io/]Configuration Manager[/url] installed, every setting above (plus the F10 panel toggle and refresh rate) is editable live from an in-game menu, with no file editing or restarts needed.
+
+[size=5][b]Requirements[/b][/size]
+
+Solar Expanse + BepInEx 5 (Mono/x64)
+
+[size=5][b]Install[/b][/size]
+
+[list=1]
+[*]Install BepInEx 5[/*]
+[*]Drop the [font=Consolas]AiPlayerIntel[/font] folder into [font=Consolas]BepInEx/plugins/[/font][/*]
+[/list]

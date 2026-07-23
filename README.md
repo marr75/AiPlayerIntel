@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="banner.png" alt="AI Player Intel banner">
+</p>
+
 # AI Player Intel
 
 AI companies in Solar Expanse already run a real trading strategy. You just never got to see it, let alone act on it. AI Player Intel puts that strategy on screen.

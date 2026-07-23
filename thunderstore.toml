@@ -1,0 +1,29 @@
+[config]
+schemaVersion = "0.0.1"
+
+[package]
+namespace = "marr75"
+name = "AiPlayerIntel"
+versionNumber = "0.0.0"
+description = "AI companies in Solar Expanse already run a real trading strategy. AI Player Intel puts that strategy on screen so you can see it and act on it."
+websiteUrl = "https://github.com/marr75/AiPlayerIntel"
+containsNsfwContent = false
+
+[package.dependencies]
+BepInEx-BepInExPack = "5.4.2100" # TODO(verify): confirm exact Thunderstore dependency string + version
+
+[build]
+icon = "./icon.png"
+readme = "./README.md"
+outdir = "./artifacts/thunderstore"
+
+[[build.copy]]
+source = "./staging/BepInEx/plugins/AiPlayerIntel/"
+target = "./BepInEx/plugins/AiPlayerIntel/"
+
+[publish]
+repository = "https://thunderstore.io"
+communities = ["solar-expanse"] # TODO(pending ecosystem-schema PR): confirm community slug
+
+[publish.categories]
+solar-expanse = ["mods"]
